@@ -645,17 +645,20 @@ function App() {
                   key={`${candidate.title}-${candidate.author}-${index}`}
                   onClick={() => void chooseCandidate(index)}
                 >
-                  <span className="confidence">
-                    {Math.round((candidate.confidence || 0) * 100)}%
-                  </span>
-                  <strong>{candidate.title}</strong>
-                  <small>{candidate.author || '作者待确认'}</small>
-                  <p>
-                    {[candidate.publisher, candidate.year, candidate.edition, candidate.isbn]
-                      .filter(Boolean)
-                      .join(' · ') || '版本信息待确认'}
-                  </p>
-                  <em>{candidate.reason || 'AI 解析候选'}</em>
+                  <div className="candidate-main">
+                    <strong>{candidate.title}</strong>
+                    <span className="confidence">
+                      {Math.round((candidate.confidence || 0) * 100)}%
+                    </span>
+                  </div>
+                  <div className="candidate-subline">
+                    <small>{candidate.author || '作者待确认'}</small>
+                    <span>
+                      {[candidate.publisher, candidate.year, candidate.edition, candidate.isbn]
+                        .filter(Boolean)
+                        .join(' · ') || '版本信息待确认'}
+                    </span>
+                  </div>
                 </button>
               ))}
             </div>
