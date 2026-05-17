@@ -205,8 +205,7 @@ function fallbackParse(text) {
     aiEnabled: false,
     needsAiKey: true,
     source: 'fallback',
-    error:
-      'No cloud LLM key and local Ollama Qwen request failed. Configure DEEPSEEK_API_KEY / BOOKROUTE_LLM_API_KEY or run Ollama.',
+    error: '',
     candidates: [
       {
         title: title || text.trim(),
@@ -216,7 +215,7 @@ function fallbackParse(text) {
         isbn: isbn || '',
         edition: '',
         confidence: 0.25,
-        reason: 'No AI key configured. This is only a local fallback.',
+        reason: '本地关键词解析结果。',
       },
     ],
   }
@@ -548,11 +547,11 @@ async function searchAllPublic(sites, keyword) {
 
 function buildSearchPageResult(source, url, keyword, reason) {
   return {
-    title: `${source} search page for "${keyword}"`,
+    title: `${source} 搜索入口：${keyword}`,
     url,
     source,
-    snippet: `Direct API results are unavailable right now: ${reason}. Open this search page to continue from the same normalized keyword.`,
-    meta: 'fallback search page',
+    snippet: `该来源暂未接入稳定公开结果 API，已生成同关键词搜索入口。${reason ? `状态：${reason}` : ''}`,
+    meta: '搜索页兜底',
   }
 }
 

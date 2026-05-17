@@ -132,17 +132,23 @@ const fallbackParse = (raw: string): ParsedQuery => {
     aiEnabled: false,
     needsAiKey: true,
     source: 'fallback',
-    error: 'AI bridge unavailable.',
+    error: '',
     candidates: [
       {
         title,
         author: '',
         isbn,
         confidence: 0.25,
-        reason: 'AI bridge unavailable. This local result is only a fallback.',
+        reason: '本地关键词解析结果。',
       },
     ],
   }
+}
+
+const buildRouteQuery = (query: ParsedQuery, index = 0) => {
+  const candidate = query.candidates[index] || query.candidates[0]
+  if (!candidate) return query.title
+  return candidate.isbn || `${candidate.title} ${candidate.author || ''}`.trim() || query.title
 }
 
 function loadProvider() {
@@ -231,7 +237,6 @@ function App() {
   const [siteCategory, setSiteCategory] = useState('Code & Open Source')
   const [loading, setLoading] = useState(false)
   const [searchingSite, setSearchingSite] = useState('')
-  const [searchingAll, setSearchingAll] = useState(false)
   const [results, setResults] = useState<SearchResult[]>([])
   const [resultError, setResultError] = useState('')
 
@@ -258,20 +263,27 @@ function App() {
     author: parsed.author || '',
     isbn: parsed.isbn,
   }
-  const routeQuery = selected.isbn || `${selected.title} ${selected.author || ''}`.trim() || parsed.title
+  const routeQuery = buildRouteQuery(parsed, selectedIndex)
   const matrixSites = useMemo(
     () => targetSites.filter((site) => site.category === siteCategory),
     [siteCategory],
   )
   const blocked = parsed.risk === 'piracy_requested'
+  const apiSourceCount = targetSites.filter((site) => site.searchable).length
 
   const runSearch = async (event?: FormEvent) => {
     event?.preventDefault()
     setSelectedIndex(0)
     setLoading(true)
+    setResultError('')
+    setResults([])
     try {
       const next = await parseWithBridge(input, provider)
       setParsed(next)
+      const nextResults = await searchAllPublic(buildRouteQuery(next, 0))
+      setResults(nextResults)
+    } catch {
+      setResultError('检索服务暂时不可用，请稍后重试。')
     } finally {
       setLoading(false)
     }
@@ -293,11 +305,11 @@ function App() {
     if (!siteProvider) {
       setResults([
         {
-          title: `${siteName} search page for "${routeQuery}"`,
+          title: `${siteName} 搜索入口：${routeQuery}`,
           url: buildSearchUrl(urlTemplate || '', routeQuery),
           source: siteName,
-          snippet: 'This site has no stable public result API configured. Open this search page from the same normalized keyword.',
-          meta: 'fallback search page',
+          snippet: '该站点暂无稳定公开结果 API，已生成同关键词搜索页入口。',
+          meta: '搜索页兜底',
         },
       ])
       return
@@ -313,36 +325,38 @@ function App() {
     }
   }
 
-  const runAllSearch = async () => {
+  const chooseCandidate = async (index: number) => {
+    setSelectedIndex(index)
     setResultError('')
     setResults([])
-    setSearchingAll(true)
+    const nextQuery = buildRouteQuery(parsed, index)
     try {
-      const next = await searchAllPublic(routeQuery)
+      const next = await searchAllPublic(nextQuery)
       setResults(next)
-    } catch (error) {
-      setResultError(error instanceof Error ? error.message : 'Aggregate search failed')
-    } finally {
-      setSearchingAll(false)
+    } catch {
+      setResultError('检索服务暂时不可用，请稍后重试。')
     }
   }
 
   return (
     <main className="app-shell">
       <section className="topbar">
-        <div>
+        <div className="topbar-copy">
           <p className="eyebrow">BookRoute Matrix</p>
-          <h1>AI 公开资料搜索矩阵</h1>
+          <h1>公开资料聚合检索</h1>
+          <p>输入书名、作者、ISBN 或主题，一次搜索聚合全部公开来源。</p>
         </div>
-        <div className={parsed.aiEnabled ? 'status-pill' : 'status-pill warning'}>
-          {parsed.aiEnabled ? `AI parser online: ${parsed.source}` : 'AI unavailable'}
+        <div className="status-strip">
+          <span>{parsed.aiEnabled ? `解析：${parsed.source === 'cloud' ? '云端模型' : '本地模型'}` : '解析：本地关键词'}</span>
+          <span>{targetSites.length} 个来源</span>
+          <span>{apiSourceCount} 个实时接口</span>
         </div>
       </section>
 
       <section className="workspace">
         <aside className="control-panel">
           <form onSubmit={runSearch}>
-            <label htmlFor="book-query">一句话描述你要找的资料</label>
+            <label htmlFor="book-query">检索需求</label>
             <textarea
               id="book-query"
               value={input}
@@ -351,7 +365,7 @@ function App() {
               placeholder="例如：想找 机器学习实战 的作者、版本、配套代码和公开读书笔记"
             />
             <button type="submit" disabled={loading}>
-              {loading ? 'AI 识别中...' : 'AI 识别关键词'}
+              {loading ? '正在解析并聚合...' : '搜索资料'}
             </button>
           </form>
 
@@ -438,8 +452,6 @@ function App() {
             </div>
           </div>
 
-          {parsed.error ? <div className="bridge-error">{parsed.error}</div> : null}
-
           <div className="policy-card">
             <h2>边界</h2>
             <p>
@@ -451,8 +463,40 @@ function App() {
         <section className="results-panel">
           <div className="section-head">
             <div>
-              <p className="eyebrow">AI candidates</p>
-              <h2>AI 关键词候选</h2>
+              <p className="eyebrow">Results</p>
+              <h2>搜索结果列表</h2>
+            </div>
+            <span>{loading ? '检索中' : `${results.length} 条`}</span>
+          </div>
+
+          {resultError ? <div className="bridge-error">{resultError}</div> : null}
+
+          <div className="result-list">
+            {results.length === 0 && !resultError ? (
+              <div className="empty-state">输入检索需求，点击左侧“搜索资料”，结果会直接出现在这里。</div>
+            ) : null}
+            {results.map((result) => (
+              <article
+                className={`result-card ${result.meta.includes('兜底') || result.meta.includes('fallback') ? 'fallback' : ''}`}
+                key={`${result.source}-${result.url}`}
+              >
+                <span className="result-source">{result.source}</span>
+                <div>
+                  <strong>{result.title}</strong>
+                  <span>{result.meta}</span>
+                </div>
+                <p>{result.snippet || 'No summary provided.'}</p>
+                <a href={result.url} target="_blank" rel="noreferrer">
+                  打开结果
+                </a>
+              </article>
+            ))}
+          </div>
+
+          <div className="section-head library-head">
+            <div>
+              <p className="eyebrow">Query candidates</p>
+              <h2>关键词候选</h2>
             </div>
             <span>{parsed.candidates.length} 个候选</span>
           </div>
@@ -463,7 +507,7 @@ function App() {
                 className={`candidate-card ${index === selectedIndex ? 'selected' : ''}`}
                 type="button"
                 key={`${candidate.title}-${candidate.author}-${index}`}
-                onClick={() => setSelectedIndex(index)}
+                onClick={() => void chooseCandidate(index)}
               >
                 <span className="confidence">
                   {Math.round((candidate.confidence || 0) * 100)}%
@@ -482,17 +526,10 @@ function App() {
 
           <div className="section-head library-head">
             <div>
-              <p className="eyebrow">Target site matrix</p>
-              <h2>公开站点搜索矩阵</h2>
+              <p className="eyebrow">Sources</p>
+              <h2>来源矩阵</h2>
             </div>
-            <button
-              className="compact-action"
-              type="button"
-              onClick={() => void runAllSearch()}
-              disabled={searchingAll}
-            >
-              {searchingAll ? '聚合中...' : `一键聚合 ${targetSites.length} 个站点`}
-            </button>
+            <span>搜索时自动覆盖全部来源</span>
           </div>
 
           <div className="category-tabs">
@@ -522,44 +559,16 @@ function App() {
                     onClick={() => void runSiteSearch(site.name, site.provider, site.urlTemplate)}
                     disabled={searchingSite === site.name}
                   >
-                    {searchingSite === site.name ? '搜索中...' : '返回结果'}
+                    {searchingSite === site.name ? '检索中...' : '单站检索'}
                   </button>
                   <a
                     href={buildSearchUrl(site.urlTemplate, routeQuery)}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    打开搜索
+                    打开站点
                   </a>
                 </div>
-              </article>
-            ))}
-          </div>
-
-          <div className="section-head library-head">
-            <div>
-              <p className="eyebrow">Search results</p>
-              <h2>搜索结果列表</h2>
-            </div>
-            <span>{results.length} 条</span>
-          </div>
-
-          {resultError ? <div className="bridge-error">{resultError}</div> : null}
-
-          <div className="result-list">
-            {results.length === 0 && !resultError ? (
-              <div className="empty-state">点击“一键聚合”或任意站点的“返回结果”，这里会显示标题、摘要、来源和可打开链接。</div>
-            ) : null}
-            {results.map((result) => (
-              <article className="result-card" key={`${result.source}-${result.url}`}>
-                <div>
-                  <strong>{result.title}</strong>
-                  <span>{result.source} · {result.meta}</span>
-                </div>
-                <p>{result.snippet || 'No summary provided.'}</p>
-                <a href={result.url} target="_blank" rel="noreferrer">
-                  打开结果
-                </a>
               </article>
             ))}
           </div>
