@@ -103,6 +103,18 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload))
 }
 
+function stripHtml(value = '') {
+  return String(value)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function truncate(value = '', length = 220) {
+  const text = stripHtml(value)
+  return text.length > length ? `${text.slice(0, length - 1)}...` : text
+}
+
 function fallbackParse(text) {
   const lower = text.toLowerCase()
   const risk = piracyTerms.some((term) => lower.includes(term.toLowerCase()))
@@ -323,9 +335,147 @@ async function parseWithAI(text, provider = {}) {
   }
 }
 
+async function searchGitHub(keyword) {
+  const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(keyword)}&sort=stars&order=desc&per_page=8`
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      'user-agent': 'BookRoute',
+    },
+  })
+  if (!response.ok) throw new Error(`GitHub search failed: ${response.status}`)
+  const data = await response.json()
+  return (data.items || []).map((item) => ({
+    title: item.full_name,
+    url: item.html_url,
+    source: 'GitHub',
+    snippet: truncate(item.description || ''),
+    meta: `${item.stargazers_count || 0} stars · ${item.language || 'unknown'} · updated ${item.updated_at?.slice(0, 10) || ''}`,
+  }))
+}
+
+async function searchHackerNews(keyword) {
+  const response = await fetch(`https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(keyword)}&tags=story&hitsPerPage=8`)
+  if (!response.ok) throw new Error(`Hacker News search failed: ${response.status}`)
+  const data = await response.json()
+  return (data.hits || []).map((item) => ({
+    title: item.title || item.story_title || 'Untitled',
+    url: item.url || `https://news.ycombinator.com/item?id=${item.objectID}`,
+    source: 'Hacker News',
+    snippet: truncate(item._highlightResult?.title?.value || item.title || ''),
+    meta: `${item.points || 0} points · ${item.num_comments || 0} comments · ${item.created_at?.slice(0, 10) || ''}`,
+  }))
+}
+
+async function searchOpenLibrary(keyword) {
+  const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(keyword)}&limit=8`)
+  if (!response.ok) throw new Error(`Open Library search failed: ${response.status}`)
+  const data = await response.json()
+  return (data.docs || []).map((item) => ({
+    title: item.title || 'Untitled',
+    url: item.key ? `https://openlibrary.org${item.key}` : `https://openlibrary.org/search?q=${encodeURIComponent(keyword)}`,
+    source: 'Open Library',
+    snippet: truncate([item.author_name?.slice(0, 3).join(', '), item.publisher?.[0]].filter(Boolean).join(' · ')),
+    meta: [item.first_publish_year, item.isbn?.[0]].filter(Boolean).join(' · '),
+  }))
+}
+
+async function searchArxiv(keyword) {
+  const response = await fetch(`https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(keyword)}&start=0&max_results=8`, {
+    headers: { 'user-agent': 'BookRoute/0.1 public-search-result-list' },
+  })
+  if (!response.ok) throw new Error(`arXiv search failed: ${response.status}`)
+  const xml = await response.text()
+  const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map((match) => match[1])
+  return entries.map((entry) => {
+    const title = stripHtml(entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] || 'Untitled')
+    const summary = stripHtml(entry.match(/<summary>([\s\S]*?)<\/summary>/)?.[1] || '')
+    const id = stripHtml(entry.match(/<id>([\s\S]*?)<\/id>/)?.[1] || '')
+    const published = stripHtml(entry.match(/<published>([\s\S]*?)<\/published>/)?.[1] || '').slice(0, 10)
+    const authors = [...entry.matchAll(/<name>([\s\S]*?)<\/name>/g)].map((author) => stripHtml(author[1])).slice(0, 3)
+    return {
+      title,
+      url: id,
+      source: 'arXiv',
+      snippet: truncate(summary),
+      meta: [authors.join(', '), published].filter(Boolean).join(' · '),
+    }
+  })
+}
+
+async function searchPublic(provider, keyword) {
+  const configs = {
+    github: {
+      source: 'GitHub',
+      url: `https://github.com/search?q=${encodeURIComponent(keyword)}`,
+      run: searchGitHub,
+    },
+    hackernews: {
+      source: 'Hacker News',
+      url: `https://hn.algolia.com/?q=${encodeURIComponent(keyword)}`,
+      run: searchHackerNews,
+    },
+    openlibrary: {
+      source: 'Open Library',
+      url: `https://openlibrary.org/search?q=${encodeURIComponent(keyword)}`,
+      run: searchOpenLibrary,
+    },
+    arxiv: {
+      source: 'arXiv',
+      url: `https://arxiv.org/search/?query=${encodeURIComponent(keyword)}&searchtype=all`,
+      run: searchArxiv,
+    },
+  }
+  const config = configs[provider]
+  if (config) {
+    try {
+      const results = await config.run(keyword)
+      if (results.length > 0) return results
+      return [buildSearchPageResult(config.source, config.url, keyword, 'No API result matched this query.')]
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'API request failed'
+      return [buildSearchPageResult(config.source, config.url, keyword, message)]
+    }
+  }
+  throw new Error(`Provider ${provider} is manual-only`)
+}
+
+function buildSearchPageResult(source, url, keyword, reason) {
+  return {
+    title: `${source} search page for "${keyword}"`,
+    url,
+    source,
+    snippet: `Direct API results are unavailable right now: ${reason}. Open this search page to continue from the same normalized keyword.`,
+    meta: 'fallback search page',
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     sendJson(res, 200, { ok: true })
+    return
+  }
+
+  if (req.method === 'POST' && req.url === '/api/search-public') {
+    let body = ''
+    req.on('data', (chunk) => {
+      body += chunk
+    })
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const keyword = String(payload.keyword || '').slice(0, 200)
+        const provider = String(payload.provider || '')
+        if (!keyword.trim()) {
+          sendJson(res, 400, { error: 'keyword is required' })
+          return
+        }
+        const results = await searchPublic(provider, keyword)
+        sendJson(res, 200, { ok: true, provider, keyword, results })
+      } catch (error) {
+        sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : 'Search failed' })
+      }
+    })
     return
   }
 

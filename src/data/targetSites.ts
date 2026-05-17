@@ -3,6 +3,8 @@ export type TargetSite = {
   category: string
   urlTemplate: string
   note: string
+  searchable?: boolean
+  provider?: string
 }
 
 export const targetSites: TargetSite[] = [
@@ -11,6 +13,8 @@ export const targetSites: TargetSite[] = [
     category: 'Code & Open Source',
     urlTemplate: 'https://github.com/search?q={keyword}',
     note: 'README, issues, wiki, companion code, reading notes.',
+    searchable: true,
+    provider: 'github',
   },
   {
     name: 'Gitee',
@@ -107,6 +111,8 @@ export const targetSites: TargetSite[] = [
     category: 'Global Tech Communities',
     urlTemplate: 'https://hn.algolia.com/?q={keyword}',
     note: 'Industry discussion and new open-source projects.',
+    searchable: true,
+    provider: 'hackernews',
   },
   {
     name: 'Reddit MachineLearning',
@@ -119,6 +125,8 @@ export const targetSites: TargetSite[] = [
     category: 'Academic & AI',
     urlTemplate: 'https://arxiv.org/search/?query={keyword}&searchtype=all',
     note: 'Open preprints for AI, ML, CS, and math.',
+    searchable: true,
+    provider: 'arxiv',
   },
   {
     name: 'Papers with Code',
@@ -173,6 +181,8 @@ export const targetSites: TargetSite[] = [
     category: 'Legal Books',
     urlTemplate: 'https://openlibrary.org/search?q={keyword}',
     note: 'Bibliographic records and lending clues.',
+    searchable: true,
+    provider: 'openlibrary',
   },
   {
     name: 'FreeTechBooks',

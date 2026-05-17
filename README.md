@@ -36,6 +36,8 @@ This project turns that into a small public tool that can be shown on GitHub and
 - Legal route cards
 - Manual purchase route generation
 - Configured target-site matrix for legal public search entry points
+- Real result lists for API-safe sources: GitHub, Hacker News, Open Library, arXiv
+- Fallback search-page result when a public API rate-limits, fails, or returns no match
 - Clean React + Vite frontend
 - Tiny local Node AI bridge
 

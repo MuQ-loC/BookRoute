@@ -547,7 +547,68 @@ button:disabled {
   line-height: 1.5;
 }
 
+.site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.site-actions button,
 .site-card a {
+  justify-self: start;
+  border-radius: 8px;
+  background: #eef3ff;
+  color: #234a8f;
+  padding: 8px 10px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.site-actions button {
+  border: 0;
+  color: #ffffff;
+  background: #234a8f;
+}
+
+.result-list {
+  display: grid;
+  gap: 12px;
+}
+
+.result-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dfe3ec;
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.result-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.result-card strong {
+  color: #172033;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.result-card span {
+  color: #69768c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.result-card p {
+  color: #4f5d73;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.result-card a {
   justify-self: start;
   border-radius: 8px;
   background: #eef3ff;

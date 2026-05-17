@@ -37,6 +37,14 @@ type ParsedQuery = {
   candidates: BookCandidate[]
 }
 
+type SearchResult = {
+  title: string
+  url: string
+  source: string
+  snippet: string
+  meta: string
+}
+
 const AI_BRIDGE_URL =
   import.meta.env.VITE_AI_BRIDGE_URL || 'http://127.0.0.1:8787/api/parse-book-query'
 
@@ -172,6 +180,18 @@ async function parseWithBridge(text: string, provider: ProviderConfig): Promise<
   }
 }
 
+async function searchPublic(provider: string, keyword: string): Promise<SearchResult[]> {
+  const response = await fetch('http://127.0.0.1:8787/api/search-public', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ provider, keyword }),
+  })
+  if (!response.ok) throw new Error('Search failed')
+  const data = await response.json()
+  if (!data.ok) throw new Error(data.error || 'Search failed')
+  return data.results || []
+}
+
 function App() {
   const [input, setInput] = useState('我想找那本机器学习实战，正版二手也行，作者好像是 Peter')
   const [provider, setProvider] = useState<ProviderConfig>(() => loadProvider())
@@ -180,6 +200,9 @@ function App() {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [siteCategory, setSiteCategory] = useState('Code & Open Source')
   const [loading, setLoading] = useState(false)
+  const [searchingSite, setSearchingSite] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [resultError, setResultError] = useState('')
 
   useEffect(() => {
     localStorage.setItem('bookroute-provider', JSON.stringify(provider))
@@ -215,6 +238,24 @@ function App() {
       ...preset,
       apiKey: current.apiKey,
     }))
+  }
+
+  const runSiteSearch = async (siteName: string, siteProvider?: string) => {
+    setResultError('')
+    setResults([])
+    if (!siteProvider) {
+      setResultError(`${siteName} 暂时只提供手动打开入口。`)
+      return
+    }
+    setSearchingSite(siteName)
+    try {
+      const next = await searchPublic(siteProvider, routeQuery)
+      setResults(next)
+    } catch (error) {
+      setResultError(error instanceof Error ? error.message : 'Search failed')
+    } finally {
+      setSearchingSite('')
+    }
   }
 
   return (
@@ -399,12 +440,51 @@ function App() {
                   <span>{site.category}</span>
                 </div>
                 <p>{site.note}</p>
-                <a
-                  href={buildSearchUrl(site.urlTemplate, routeQuery)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  打开搜索
+                <div className="site-actions">
+                  {site.searchable ? (
+                    <button
+                      type="button"
+                      onClick={() => void runSiteSearch(site.name, site.provider)}
+                      disabled={searchingSite === site.name}
+                    >
+                      {searchingSite === site.name ? '搜索中...' : '返回结果'}
+                    </button>
+                  ) : null}
+                  <a
+                    href={buildSearchUrl(site.urlTemplate, routeQuery)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    打开搜索
+                  </a>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="section-head library-head">
+            <div>
+              <p className="eyebrow">Search results</p>
+              <h2>搜索结果列表</h2>
+            </div>
+            <span>{results.length} 条</span>
+          </div>
+
+          {resultError ? <div className="bridge-error">{resultError}</div> : null}
+
+          <div className="result-list">
+            {results.length === 0 && !resultError ? (
+              <div className="empty-state">选择支持 API 的站点，点击“返回结果”，这里会显示标题、摘要、来源和可打开链接。</div>
+            ) : null}
+            {results.map((result) => (
+              <article className="result-card" key={`${result.source}-${result.url}`}>
+                <div>
+                  <strong>{result.title}</strong>
+                  <span>{result.source} · {result.meta}</span>
+                </div>
+                <p>{result.snippet || 'No summary provided.'}</p>
+                <a href={result.url} target="_blank" rel="noreferrer">
+                  打开结果
                 </a>
               </article>
             ))}
