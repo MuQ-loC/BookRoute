@@ -494,10 +494,9 @@ async function searchPublic(provider, keyword) {
     try {
       const results = await config.run(keyword)
       if (results.length > 0) return results
-      return [buildSearchPageResult(config.source, config.url, keyword, 'No API result matched this query.')]
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'API request failed'
-      return [buildSearchPageResult(config.source, config.url, keyword, message)]
+      return [buildSearchPageResult(config.source, config.url, keyword)]
+    } catch {
+      return [buildSearchPageResult(config.source, config.url, keyword)]
     }
   }
   throw new Error(`Provider ${provider} is manual-only`)
@@ -518,7 +517,6 @@ async function searchSite(site, keyword) {
       site.name || 'Search site',
       buildUrlFromTemplate(site.urlTemplate || '', keyword),
       keyword,
-      'This site has no stable public result API configured.',
     ),
   ]
 }
@@ -529,14 +527,12 @@ async function searchAllPublic(sites, keyword) {
     safeSites.map(async (site) => {
       try {
         return await searchSite(site, keyword)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Search failed'
+      } catch {
         return [
           buildSearchPageResult(
             site.name || 'Search site',
             buildUrlFromTemplate(site.urlTemplate || '', keyword),
             keyword,
-            message,
           ),
         ]
       }
@@ -545,13 +541,13 @@ async function searchAllPublic(sites, keyword) {
   return batches.flat()
 }
 
-function buildSearchPageResult(source, url, keyword, reason) {
+function buildSearchPageResult(source, url, keyword) {
   return {
     title: `${source} 搜索入口：${keyword}`,
     url,
     source,
-    snippet: `该来源暂未接入稳定公开结果 API，已生成同关键词搜索入口。${reason ? `状态：${reason}` : ''}`,
-    meta: '搜索页兜底',
+    snippet: '已生成该来源的站内搜索入口，可直接打开查看相关公开页面。',
+    meta: '站内搜索入口',
   }
 }
 

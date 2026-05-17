@@ -331,8 +331,8 @@ function App() {
           title: `${siteName} 搜索入口：${routeQuery}`,
           url: buildSearchUrl(urlTemplate || '', routeQuery),
           source: siteName,
-          snippet: '该站点暂无稳定公开结果 API，已生成同关键词搜索页入口。',
-          meta: '搜索页兜底',
+          snippet: '已生成该来源的站内搜索入口，可直接打开查看相关公开页面。',
+          meta: '站内搜索入口',
         },
       ])
       return
@@ -527,7 +527,7 @@ function App() {
               ) : null}
               {pagedResults.map((result) => (
                 <article
-                  className={`result-card ${result.meta.includes('兜底') || result.meta.includes('fallback') ? 'fallback' : ''}`}
+                  className={`result-card ${result.meta.includes('站内搜索入口') ? 'fallback' : ''}`}
                   key={`${result.source}-${result.url}`}
                 >
                   <div>
