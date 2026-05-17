@@ -10,6 +10,7 @@ BookRoute takes a natural-language book request and returns legal routes:
 - Gutendex / Project Gutenberg public-domain route
 - DOAB open-access academic books
 - Manual purchase search for authorized new or used copies
+- GitHub / CSDN public search routes for book notes, examples, edition clues, and legal public references
 
 It does not return pirated netdisk links, extraction codes, unofficial PDF mirrors, or automatic transfer workflows for suspected infringing files.
 
@@ -73,6 +74,7 @@ The project does not:
 - bypass platform rules
 - automate purchases without explicit human confirmation
 - transfer suspected infringing files into a personal netdisk
+- crawl GitHub / CSDN content in bulk or bypass login, paywalls, robots, or platform limits
 
 The AI bridge prompt explicitly blocks piracy-oriented output.
 
@@ -120,6 +122,7 @@ User query
   -> user selects exact candidate
   -> piracy intent check
   -> Open Library / public legal routes
+  -> GitHub / CSDN public search entry points
   -> route cards
   -> manual purchase / borrowing action
 ```

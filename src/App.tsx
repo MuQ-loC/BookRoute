@@ -164,6 +164,24 @@ const buildRoutes = (query: ParsedQuery, selected: BookCandidate): BookRoute[] =
       url: `https://www.google.com/search?q=${encodeURIComponent(`${routeQuery} 正版 二手 购买`)}`,
       priceHint: '按平台价格',
     },
+    {
+      name: 'GitHub',
+      type: '开源书单 / 示例代码 / 读书笔记',
+      status: 'manual',
+      description: '搜索公开仓库中的书单、配套代码、学习笔记和合法开源资料；不抓取受版权保护的书籍全文。',
+      actionLabel: '搜 GitHub',
+      url: `https://github.com/search?q=${encodeURIComponent(`${routeQuery} book notes examples`)}&type=repositories`,
+      priceHint: '公开搜索',
+    },
+    {
+      name: 'CSDN / 技术社区',
+      type: '书评 / 版本辨认 / 资料线索',
+      status: 'manual',
+      description: '搜索公开技术文章，用来确认作者、版本、目录、学习路线；不批量抓取正文，不聚合盗版链接。',
+      actionLabel: '搜 CSDN',
+      url: `https://so.csdn.net/so/search?q=${encodeURIComponent(routeQuery)}`,
+      priceHint: '公开搜索',
+    },
   ]
 
   if (query.risk === 'piracy_requested') {
