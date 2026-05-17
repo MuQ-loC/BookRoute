@@ -42,6 +42,25 @@ POST /chat/completions
 response_format: { "type": "json_object" }
 ```
 
+## Local Qwen Through Ollama
+
+BookRoute can use the same local Qwen pattern as `BookSeedSpriteWorld`.
+
+Install / run:
+
+```powershell
+ollama run qwen2.5:3b
+```
+
+Configure:
+
+```text
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5:3b
+```
+
+If no cloud key is configured, the bridge automatically tries Ollama.
+
 ## What AI Does
 
 AI returns:

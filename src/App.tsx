@@ -36,7 +36,7 @@ type ParsedQuery = {
   normalizedQuery?: string
   aiEnabled?: boolean
   needsAiKey?: boolean
-  source?: 'deepseek' | 'fallback'
+  source?: 'cloud' | 'ollama' | 'fallback'
   error?: string
   candidates: BookCandidate[]
 }
@@ -291,7 +291,7 @@ function App() {
           <h1>合法找书与采购路线助手</h1>
         </div>
         <div className={parsed.aiEnabled ? 'status-pill' : 'status-pill warning'}>
-          {parsed.aiEnabled ? 'AI parser online' : 'AI key missing'}
+          {parsed.aiEnabled ? `AI parser online: ${parsed.source}` : 'AI unavailable'}
         </div>
       </section>
 
@@ -313,8 +313,7 @@ function App() {
 
           {parsed.needsAiKey ? (
             <div className="ai-required">
-              这个产品必须接 AI 才有意义。请在本地 .env 配置 DEEPSEEK_API_KEY 或
-              BOOKROUTE_LLM_API_KEY。
+              这个产品必须接 AI 才有意义。可配置云端 LLM，或启动本机 Ollama qwen2.5:3b。
             </div>
           ) : null}
 

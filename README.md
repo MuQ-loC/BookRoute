@@ -29,7 +29,7 @@ This project turns that into a small public tool that can be shown on GitHub and
 ## Features
 
 - AI-first natural-language book disambiguation
-- DeepSeek bridge for title / author / publisher / year / ISBN / edition candidates
+- Cloud LLM or local Ollama Qwen bridge for title / author / publisher / year / ISBN / edition candidates
 - Built-in piracy-intent blocker
 - Open Library API search
 - Legal route cards
@@ -59,7 +59,7 @@ Copy-Item .env.example .env
 npm run server
 ```
 
-The frontend can fall back to local parsing if the bridge is not running, but real product value depends on the AI bridge. Local parsing is only a failure mode.
+The bridge tries cloud LLM first if configured, then local Ollama Qwen. Local string parsing is only a failure mode.
 
 ## Legal Boundary
 
@@ -114,7 +114,8 @@ Starter pricing:
 ```text
 User query
   -> React frontend
-  -> local DeepSeek bridge
+  -> local AI bridge
+  -> cloud LLM or Ollama qwen2.5:3b
   -> AI book candidates with author / publisher / year / ISBN / confidence
   -> user selects exact candidate
   -> piracy intent check

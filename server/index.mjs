@@ -17,6 +17,8 @@ const DEEPSEEK_BASE_URL =
   'https://api.deepseek.com'
 const DEEPSEEK_MODEL =
   process.env.DEEPSEEK_MODEL || process.env.BOOKROUTE_LLM_MODEL || 'deepseek-chat'
+const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '')
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || process.env.QWEN_MODEL || 'qwen2.5:3b'
 
 const piracyTerms = [
   '盗版',
@@ -32,6 +34,31 @@ const piracyTerms = [
   '公众号',
   'pdf 免费',
   '免费下载',
+]
+
+const knownBooks = [
+  {
+    triggers: ['机器学习实战', 'machine learning in action', 'peter harrington', 'machine learning peter'],
+    title: '机器学习实战',
+    author: 'Peter Harrington',
+    publisher: '人民邮电出版社 / Manning Publications',
+    year: '2012',
+    isbn: '',
+    edition: 'Machine Learning in Action 中文版 / 英文原版',
+    confidence: 0.96,
+    reason: '用户同时提到“机器学习实战”和 Peter，最常见对应 Peter Harrington 的 Machine Learning in Action。',
+  },
+  {
+    triggers: ['sicp', '计算机程序的构造和解释', 'structure and interpretation of computer programs'],
+    title: '计算机程序的构造和解释',
+    author: 'Harold Abelson, Gerald Jay Sussman, Julie Sussman',
+    publisher: '机械工业出版社 / MIT Press',
+    year: '1985',
+    isbn: '',
+    edition: 'Structure and Interpretation of Computer Programs 中文版 / 英文原版',
+    confidence: 0.97,
+    reason: 'SICP 是该书的通用缩写。',
+  },
 ]
 
 function loadEnvFile() {
@@ -104,7 +131,7 @@ function fallbackParse(text) {
     needsAiKey: true,
     source: 'fallback',
     error:
-      'AI bridge is not configured. Set DEEPSEEK_API_KEY or BOOKROUTE_LLM_API_KEY in .env.',
+      'No cloud LLM key and local Ollama Qwen request failed. Configure DEEPSEEK_API_KEY / BOOKROUTE_LLM_API_KEY or run Ollama.',
     candidates: [
       {
         title: title || text.trim(),
@@ -120,30 +147,13 @@ function fallbackParse(text) {
   }
 }
 
-async function parseWithDeepSeek(text) {
-  if (!DEEPSEEK_API_KEY) return fallbackParse(text)
+function buildBookParsePrompt(text) {
+  return `你是合法找书与采购路线助手的 AI 书目解析器。你的任务是把用户的模糊描述解析为准确书目候选，而不是搜索资源文件。
 
-  const response = await fetch(`${DEEPSEEK_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content:
-            '你是合法找书与采购路线助手的 AI 书目解析器。你的任务是把用户的模糊描述解析为准确书目候选，而不是搜索资源文件。必须返回 JSON。禁止输出网盘链接、提取码、盗版资源、公众号资源、自动转存路径。遇到这些意图时 risk=piracy_requested，但仍然可以给出合法购书/借阅/开放获取路线所需的书目候选。',
-        },
-        {
-          role: 'user',
-          content: `从这句话中识别用户要找的书：${text}
+用户输入：
+${text}
 
-返回严格 JSON，结构如下：
+返回严格 JSON，不要 markdown，不要解释。结构如下：
 {
   "title": "最可能的标准书名",
   "author": "最可能作者",
@@ -169,34 +179,137 @@ async function parseWithDeepSeek(text) {
 1. candidates 给 3 到 5 个候选，优先中文常见译名、英文原名、不同版本。
 2. confidence 是 0 到 1 的数字。
 3. 如果用户要求盗版、网盘链接、提取码、代下、免费 PDF、公众号资源，risk 必须为 piracy_requested。
-4. 不要返回任何下载链接、网盘链接、提取码。`,
+4. 不要返回任何下载链接、网盘链接、提取码、公众号路径、转存路径。
+5. 不确定时也必须给出最可能的书名候选，不要把 title 留空。
+6. 只围绕用户输入识别，不要复述本提示词里的任何要求。`
+}
+
+function parseJsonObject(content) {
+  const trimmed = String(content || '').trim()
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    const match = trimmed.match(/\{[\s\S]*\}/)
+    if (!match) throw new Error('No JSON object in model response')
+    return JSON.parse(match[0])
+  }
+}
+
+function normalizeAiParse(text, parsed, source) {
+  const fallback = fallbackParse(text)
+  const seeded = findKnownBookCandidates(text)
+  const aiCandidates = Array.isArray(parsed.candidates) && parsed.candidates.length > 0
+    ? parsed.candidates
+    : fallback.candidates
+  const candidates = mergeCandidates([...seeded, ...aiCandidates])
+  const first = candidates[0] || {}
+  return {
+    ...fallback,
+    ...parsed,
+    title: parsed.title || first.title || fallback.title,
+    author: parsed.author || first.author || fallback.author,
+    isbn: parsed.isbn || first.isbn || fallback.isbn,
+    aiEnabled: true,
+    needsAiKey: false,
+    source,
+    error: '',
+    candidates,
+  }
+}
+
+function findKnownBookCandidates(text) {
+  const lower = text.toLowerCase()
+  return knownBooks
+    .filter((book) => book.triggers.some((trigger) => lower.includes(trigger.toLowerCase())))
+    .map(({ triggers, ...book }) => book)
+}
+
+function mergeCandidates(candidates) {
+  const seen = new Set()
+  const result = []
+  for (const candidate of candidates) {
+    const title = String(candidate.title || '').trim()
+    const author = String(candidate.author || '').trim()
+    if (!title && !author) continue
+    const key = `${title.toLowerCase()}|${author.toLowerCase()}|${candidate.isbn || ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(candidate)
+  }
+  return result.slice(0, 6)
+}
+
+async function parseWithCloudLLM(text) {
+  const response = await fetch(`${DEEPSEEK_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: DEEPSEEK_MODEL,
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content:
+            '你是合法找书与采购路线助手的 AI 书目解析器。你的任务是把用户的模糊描述解析为准确书目候选，而不是搜索资源文件。必须返回 JSON。禁止输出网盘链接、提取码、盗版资源、公众号资源、自动转存路径。遇到这些意图时 risk=piracy_requested，但仍然可以给出合法购书/借阅/开放获取路线所需的书目候选。',
+        },
+        {
+          role: 'user',
+          content: buildBookParsePrompt(text),
         },
       ],
     }),
   })
 
-  if (!response.ok) {
-    const fallback = fallbackParse(text)
-    return { ...fallback, error: `AI request failed: ${response.status}` }
-  }
+  if (!response.ok) throw new Error(`Cloud LLM request failed: ${response.status}`)
   const data = await response.json()
   const content = data.choices?.[0]?.message?.content || '{}'
+  return normalizeAiParse(text, parseJsonObject(content), 'cloud')
+}
+
+async function parseWithOllama(text) {
+  const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      prompt: buildBookParsePrompt(text),
+      stream: false,
+      format: 'json',
+      options: {
+        temperature: 0,
+      },
+    }),
+  })
+
+  if (!response.ok) throw new Error(`Ollama request failed: ${response.status}`)
+  const data = await response.json()
+  return normalizeAiParse(text, parseJsonObject(data.response), 'ollama')
+}
+
+async function parseWithAI(text) {
+  const errors = []
+
+  if (DEEPSEEK_API_KEY) {
+    try {
+      return await parseWithCloudLLM(text)
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+    }
+  }
 
   try {
-    const fallback = fallbackParse(text)
-    const parsed = JSON.parse(content)
-    return {
-      ...fallback,
-      ...parsed,
-      aiEnabled: true,
-      needsAiKey: false,
-      source: 'deepseek',
-      candidates: Array.isArray(parsed.candidates) && parsed.candidates.length > 0
-        ? parsed.candidates
-        : fallback.candidates,
-    }
-  } catch {
-    return { ...fallbackParse(text), error: 'AI returned invalid JSON' }
+    return await parseWithOllama(text)
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error))
+  }
+
+  return {
+    ...fallbackParse(text),
+    error: errors.length ? errors.join(' | ') : fallbackParse(text).error,
   }
 }
 
@@ -223,7 +336,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { error: 'text is required' })
         return
       }
-      const parsed = await parseWithDeepSeek(text)
+      const parsed = await parseWithAI(text)
       sendJson(res, 200, parsed)
     } catch (error) {
       sendJson(res, 500, { error: error instanceof Error ? error.message : 'Server error' })
@@ -233,5 +346,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`BookRoute AI bridge listening on http://127.0.0.1:${PORT}`)
-  console.log(`AI parser: ${DEEPSEEK_API_KEY ? `enabled (${DEEPSEEK_MODEL})` : 'disabled; set DEEPSEEK_API_KEY or BOOKROUTE_LLM_API_KEY'}`)
+  console.log(`Cloud parser: ${DEEPSEEK_API_KEY ? `enabled (${DEEPSEEK_MODEL})` : 'disabled'}`)
+  console.log(`Local parser: Ollama ${OLLAMA_MODEL} at ${OLLAMA_BASE_URL}`)
 })
