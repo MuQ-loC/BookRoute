@@ -53,6 +53,7 @@ const AI_BRIDGE_URL =
 const AI_PROVIDER_URL =
   import.meta.env.VITE_AI_PROVIDER_URL || 'http://127.0.0.1:8787/api/providers'
 const ALL_SOURCES = '全部来源'
+const PAGE_SIZE = 10
 
 const defaultProvider: ProviderConfig = {
   type: 'auto',
@@ -272,12 +273,29 @@ function App() {
     [siteCategory],
   )
   const sourceTabs = useMemo(() => [ALL_SOURCES, ...targetCategories], [])
+  const resultCategoryBySource = useMemo(
+    () => new Map(targetSites.map((site) => [site.name, site.category])),
+    [],
+  )
+  const filteredResults = useMemo(
+    () => (siteCategory === ALL_SOURCES
+      ? results
+      : results.filter((result) => resultCategoryBySource.get(result.source) === siteCategory)),
+    [resultCategoryBySource, results, siteCategory],
+  )
+  const [resultPage, setResultPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(filteredResults.length / PAGE_SIZE))
+  const currentPage = Math.min(resultPage, totalPages)
+  const pageStart = filteredResults.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const pageEnd = Math.min(currentPage * PAGE_SIZE, filteredResults.length)
+  const pagedResults = filteredResults.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
   const blocked = parsed.risk === 'piracy_requested'
   const apiSourceCount = targetSites.filter((site) => site.searchable).length
 
   const runSearch = async (event?: FormEvent) => {
     event?.preventDefault()
     setSelectedIndex(0)
+    setResultPage(1)
     setLoading(true)
     setResultError('')
     setResults([])
@@ -305,6 +323,7 @@ function App() {
 
   const runSiteSearch = async (siteName: string, siteProvider?: string, urlTemplate?: string) => {
     setResultError('')
+    setResultPage(1)
     setResults([])
     if (!siteProvider) {
       setResults([
@@ -331,6 +350,7 @@ function App() {
 
   const chooseCandidate = async (index: number) => {
     setSelectedIndex(index)
+    setResultPage(1)
     setResultError('')
     setResults([])
     const nextQuery = buildRouteQuery(parsed, index)
@@ -470,7 +490,29 @@ function App() {
               <p className="eyebrow">Results</p>
               <h2>搜索结果列表</h2>
             </div>
-            <span>{loading ? '检索中' : `${results.length} 条`}</span>
+            <span>
+              {loading
+                ? '检索中'
+                : siteCategory === ALL_SOURCES
+                  ? `${results.length} 条`
+                  : `${filteredResults.length} / ${results.length} 条`}
+            </span>
+          </div>
+
+          <div className="category-tabs result-tabs">
+            {sourceTabs.map((category) => (
+              <button
+                type="button"
+                key={category}
+                className={category === siteCategory ? 'active' : ''}
+                onClick={() => {
+                  setSiteCategory(category)
+                  setResultPage(1)
+                }}
+              >
+                {category}
+              </button>
+            ))}
           </div>
 
           {resultError ? <div className="bridge-error">{resultError}</div> : null}
@@ -479,23 +521,53 @@ function App() {
             {results.length === 0 && !resultError ? (
               <div className="empty-state">输入检索需求，点击左侧“搜索资料”，结果会直接出现在这里。</div>
             ) : null}
-            {results.map((result) => (
+            {results.length > 0 && filteredResults.length === 0 && !resultError ? (
+              <div className="empty-state">当前来源分类没有结果，切回“全部来源”可查看完整列表。</div>
+            ) : null}
+            {pagedResults.map((result) => (
               <article
                 className={`result-card ${result.meta.includes('兜底') || result.meta.includes('fallback') ? 'fallback' : ''}`}
                 key={`${result.source}-${result.url}`}
               >
-                <span className="result-source">{result.source}</span>
                 <div>
-                  <strong>{result.title}</strong>
-                  <span>{result.meta}</span>
+                  <div className="result-titleline">
+                    <span className="result-source">{result.source}</span>
+                    <strong>{result.title}</strong>
+                  </div>
+                  <p>{result.snippet || 'No summary provided.'}</p>
+                  <span className="result-meta">{result.meta}</span>
                 </div>
-                <p>{result.snippet || 'No summary provided.'}</p>
                 <a href={result.url} target="_blank" rel="noreferrer">
-                  打开结果
+                  打开
                 </a>
               </article>
             ))}
           </div>
+
+          {filteredResults.length > PAGE_SIZE ? (
+            <div className="pagination-bar">
+              <span>
+                {pageStart}-{pageEnd} / {filteredResults.length}
+              </span>
+              <div>
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setResultPage((page) => Math.max(1, page - 1))}
+                >
+                  上一页
+                </button>
+                <span>{currentPage} / {totalPages}</span>
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setResultPage((page) => Math.min(totalPages, page + 1))}
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="section-head library-head">
             <div>
@@ -534,19 +606,6 @@ function App() {
               <h2>来源矩阵</h2>
             </div>
             <span>{siteCategory === ALL_SOURCES ? `${targetSites.length} 个来源` : `${matrixSites.length} 个来源`}</span>
-          </div>
-
-          <div className="category-tabs">
-            {sourceTabs.map((category) => (
-              <button
-                type="button"
-                key={category}
-                className={category === siteCategory ? 'active' : ''}
-                onClick={() => setSiteCategory(category)}
-              >
-                {category}
-              </button>
-            ))}
           </div>
 
           <div className="site-grid">
