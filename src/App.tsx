@@ -52,6 +52,7 @@ const AI_BRIDGE_URL =
   import.meta.env.VITE_AI_BRIDGE_URL || 'http://127.0.0.1:8787/api/parse-book-query'
 const AI_PROVIDER_URL =
   import.meta.env.VITE_AI_PROVIDER_URL || 'http://127.0.0.1:8787/api/providers'
+const ALL_SOURCES = '全部来源'
 
 const defaultProvider: ProviderConfig = {
   type: 'auto',
@@ -234,7 +235,7 @@ function App() {
   const [showKey, setShowKey] = useState(false)
   const [parsed, setParsed] = useState<ParsedQuery>(() => fallbackParse(input))
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [siteCategory, setSiteCategory] = useState('Code & Open Source')
+  const [siteCategory, setSiteCategory] = useState(ALL_SOURCES)
   const [loading, setLoading] = useState(false)
   const [searchingSite, setSearchingSite] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -265,9 +266,12 @@ function App() {
   }
   const routeQuery = buildRouteQuery(parsed, selectedIndex)
   const matrixSites = useMemo(
-    () => targetSites.filter((site) => site.category === siteCategory),
+    () => (siteCategory === ALL_SOURCES
+      ? targetSites
+      : targetSites.filter((site) => site.category === siteCategory)),
     [siteCategory],
   )
+  const sourceTabs = useMemo(() => [ALL_SOURCES, ...targetCategories], [])
   const blocked = parsed.risk === 'piracy_requested'
   const apiSourceCount = targetSites.filter((site) => site.searchable).length
 
@@ -529,11 +533,11 @@ function App() {
               <p className="eyebrow">Sources</p>
               <h2>来源矩阵</h2>
             </div>
-            <span>搜索时自动覆盖全部来源</span>
+            <span>{siteCategory === ALL_SOURCES ? `${targetSites.length} 个来源` : `${matrixSites.length} 个来源`}</span>
           </div>
 
           <div className="category-tabs">
-            {targetCategories.map((category) => (
+            {sourceTabs.map((category) => (
               <button
                 type="button"
                 key={category}
