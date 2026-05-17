@@ -35,6 +35,7 @@ This project turns that into a small public tool that can be shown on GitHub and
 - Open Library API search
 - Legal route cards
 - Manual purchase route generation
+- Configured target-site matrix for legal public search entry points
 - Clean React + Vite frontend
 - Tiny local Node AI bridge
 

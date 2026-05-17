@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
+import { buildSearchUrl, targetCategories, targetSites } from './data/targetSites'
 
 type RouteStatus = 'ready' | 'blocked' | 'manual'
 
@@ -257,6 +258,7 @@ function App() {
   const [input, setInput] = useState('我想找那本机器学习实战，正版二手也行，作者好像是 Peter')
   const [parsed, setParsed] = useState<ParsedQuery>(() => fallbackParse(input))
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [siteCategory, setSiteCategory] = useState('Code & Open Source')
   const [libraryMatches, setLibraryMatches] = useState<BookCandidate[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -266,7 +268,12 @@ function App() {
     author: parsed.author || '',
     isbn: parsed.isbn,
   }
+  const routeQuery = selected.isbn || `${selected.title} ${selected.author || ''}`.trim() || parsed.title
   const routes = useMemo(() => buildRoutes(parsed, selected), [parsed, selected])
+  const matrixSites = useMemo(
+    () => targetSites.filter((site) => site.category === siteCategory),
+    [siteCategory],
+  )
   const blocked = parsed.risk === 'piracy_requested'
 
   const runSearch = async (event?: FormEvent) => {
@@ -468,6 +475,46 @@ function App() {
                     {book.isbn ? ` · ${book.isbn}` : ''}
                   </span>
                 </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="section-head library-head">
+            <div>
+              <p className="eyebrow">Target site matrix</p>
+              <h2>公开站点搜索矩阵</h2>
+            </div>
+            <span>{targetSites.length} 个入口</span>
+          </div>
+
+          <div className="category-tabs">
+            {targetCategories.map((category) => (
+              <button
+                type="button"
+                key={category}
+                className={category === siteCategory ? 'active' : ''}
+                onClick={() => setSiteCategory(category)}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          <div className="site-grid">
+            {matrixSites.map((site) => (
+              <article className="site-card" key={site.name}>
+                <div>
+                  <strong>{site.name}</strong>
+                  <span>{site.category}</span>
+                </div>
+                <p>{site.note}</p>
+                <a
+                  href={buildSearchUrl(site.urlTemplate, routeQuery)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  打开搜索
+                </a>
               </article>
             ))}
           </div>

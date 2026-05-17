@@ -424,6 +424,75 @@ button:disabled {
   font-weight: 700;
 }
 
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.category-tabs button {
+  border: 1px solid #d4dbea;
+  background: #ffffff;
+  color: #40516d;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.category-tabs button.active {
+  border-color: #234a8f;
+  background: #eef3ff;
+  color: #234a8f;
+}
+
+.site-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.site-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dfe3ec;
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.site-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.site-card strong {
+  color: #18202f;
+  font-size: 14px;
+}
+
+.site-card span {
+  color: #728096;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.site-card p {
+  color: #526176;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.site-card a {
+  justify-self: start;
+  border-radius: 8px;
+  background: #eef3ff;
+  color: #234a8f;
+  padding: 8px 10px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 @media (max-width: 980px) {
   .topbar {
     align-items: flex-start;
@@ -450,6 +519,10 @@ button:disabled {
   }
 
   .candidate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .site-grid {
     grid-template-columns: 1fr;
   }
 }

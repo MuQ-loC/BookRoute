@@ -30,6 +30,7 @@ BookRoute can search public websites, but public does not mean unlimited reuse.
 
 - Searching for netdisk piracy links.
 - Returning extraction codes.
+- Adding LibGen, Z-Library, piracy mirrors, or similar infringement-oriented sources to the public matrix.
 - Bulk crawling article bodies.
 - Copying full copyrighted articles into our database.
 - Bypassing login, paywalls, anti-crawler measures, rate limits, or platform rules.
@@ -54,4 +55,3 @@ Prefer official GitHub search pages or GitHub REST API. Keep requests rate-limit
 ## CSDN
 
 Use CSDN as a manual search route first. Do not scrape article bodies in the MVP.
-
