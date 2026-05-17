@@ -10,10 +10,12 @@
 
 body {
   margin: 0;
+  overflow: hidden;
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: #eef2f7;
   color: #172033;
 }
@@ -24,6 +26,7 @@ body {
   justify-content: space-between;
   gap: 24px;
   padding: 22px 32px;
+  height: 91px;
   border-bottom: 1px solid #d8dee8;
   background: #ffffff;
 }
@@ -88,13 +91,16 @@ h2 {
 .workspace {
   display: grid;
   grid-template-columns: minmax(340px, 410px) minmax(0, 1fr);
-  min-height: calc(100vh - 91px);
+  height: calc(100vh - 91px);
+  min-height: 0;
 }
 
 .control-panel {
   border-right: 1px solid #d8dee8;
   background: #ffffff;
   padding: 24px;
+  min-height: 0;
+  overflow: auto;
 }
 
 form {
@@ -275,24 +281,57 @@ button:disabled {
 }
 
 .results-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 174px 220px;
+  gap: 14px;
+  min-height: 0;
   padding: 24px;
+  overflow: hidden;
 }
 
 .section-head {
   margin-bottom: 14px;
 }
 
+.results-region,
+.candidates-region,
+.sources-region {
+  min-height: 0;
+  border: 1px solid #dbe2ec;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.results-region {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.candidates-region,
+.sources-region {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .candidate-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 1fr);
+  grid-template-columns: none;
   gap: 10px;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
 }
 
 .candidate-card {
   position: relative;
   display: grid;
   gap: 6px;
-  min-height: 130px;
+  min-height: 112px;
   border: 1px solid #dbe2ec;
   border-radius: 8px;
   background: #ffffff;
@@ -330,6 +369,10 @@ button:disabled {
   color: #607086;
   font-size: 12px;
   line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .candidate-card em {
@@ -348,13 +391,13 @@ button:disabled {
   font-weight: 900;
 }
 
-.library-head {
-  margin-top: 24px;
-}
-
 .result-list {
   display: grid;
+  align-content: start;
   gap: 6px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .empty-state {
@@ -488,16 +531,20 @@ button:disabled {
 
 .site-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .site-card {
   display: grid;
-  gap: 9px;
+  gap: 7px;
   border: 1px solid #dbe2ec;
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   background: #ffffff;
 }
 
@@ -520,7 +567,11 @@ button:disabled {
 .site-card p {
   color: #526176;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.35;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .site-actions {
@@ -548,13 +599,46 @@ button:disabled {
 }
 
 @media (max-width: 1100px) {
+  body,
+  .app-shell {
+    overflow: auto;
+  }
+
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .topbar {
+    height: auto;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
+    height: auto;
   }
 
   .control-panel {
     border-right: 0;
     border-bottom: 1px solid #d8dee8;
+    overflow: visible;
+  }
+
+  .results-panel {
+    grid-template-rows: auto;
+    overflow: visible;
+  }
+
+  .results-region,
+  .candidates-region,
+  .sources-region {
+    overflow: visible;
+  }
+
+  .result-list,
+  .candidate-grid,
+  .site-grid {
+    overflow: visible;
   }
 
   .candidate-grid,
@@ -582,6 +666,7 @@ button:disabled {
   .candidate-grid,
   .site-grid {
     grid-template-columns: 1fr;
+    grid-auto-flow: row;
   }
 
   .result-card {

@@ -53,7 +53,7 @@ const AI_BRIDGE_URL =
 const AI_PROVIDER_URL =
   import.meta.env.VITE_AI_PROVIDER_URL || 'http://127.0.0.1:8787/api/providers'
 const ALL_SOURCES = '全部来源'
-const PAGE_SIZE = 10
+const PAGE_SIZE = 8
 
 const defaultProvider: ProviderConfig = {
   type: 'auto',
@@ -485,156 +485,162 @@ function App() {
         </aside>
 
         <section className="results-panel">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow">Results</p>
-              <h2>搜索结果列表</h2>
-            </div>
-            <span>
-              {loading
-                ? '检索中'
-                : siteCategory === ALL_SOURCES
-                  ? `${results.length} 条`
-                  : `${filteredResults.length} / ${results.length} 条`}
-            </span>
-          </div>
-
-          <div className="category-tabs result-tabs">
-            {sourceTabs.map((category) => (
-              <button
-                type="button"
-                key={category}
-                className={category === siteCategory ? 'active' : ''}
-                onClick={() => {
-                  setSiteCategory(category)
-                  setResultPage(1)
-                }}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-          {resultError ? <div className="bridge-error">{resultError}</div> : null}
-
-          <div className="result-list">
-            {results.length === 0 && !resultError ? (
-              <div className="empty-state">输入检索需求，点击左侧“搜索资料”，结果会直接出现在这里。</div>
-            ) : null}
-            {results.length > 0 && filteredResults.length === 0 && !resultError ? (
-              <div className="empty-state">当前来源分类没有结果，切回“全部来源”可查看完整列表。</div>
-            ) : null}
-            {pagedResults.map((result) => (
-              <article
-                className={`result-card ${result.meta.includes('兜底') || result.meta.includes('fallback') ? 'fallback' : ''}`}
-                key={`${result.source}-${result.url}`}
-              >
-                <div>
-                  <div className="result-titleline">
-                    <span className="result-source">{result.source}</span>
-                    <strong>{result.title}</strong>
-                  </div>
-                  <p>{result.snippet || 'No summary provided.'}</p>
-                  <span className="result-meta">{result.meta}</span>
-                </div>
-                <a href={result.url} target="_blank" rel="noreferrer">
-                  打开
-                </a>
-              </article>
-            ))}
-          </div>
-
-          {filteredResults.length > PAGE_SIZE ? (
-            <div className="pagination-bar">
-              <span>
-                {pageStart}-{pageEnd} / {filteredResults.length}
-              </span>
+          <section className="results-region">
+            <div className="section-head">
               <div>
-                <button
-                  type="button"
-                  disabled={currentPage <= 1}
-                  onClick={() => setResultPage((page) => Math.max(1, page - 1))}
-                >
-                  上一页
-                </button>
-                <span>{currentPage} / {totalPages}</span>
-                <button
-                  type="button"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setResultPage((page) => Math.min(totalPages, page + 1))}
-                >
-                  下一页
-                </button>
+                <p className="eyebrow">Results</p>
+                <h2>搜索结果列表</h2>
               </div>
+              <span>
+                {loading
+                  ? '检索中'
+                  : siteCategory === ALL_SOURCES
+                    ? `${results.length} 条`
+                    : `${filteredResults.length} / ${results.length} 条`}
+              </span>
             </div>
-          ) : null}
 
-          <div className="section-head library-head">
-            <div>
-              <p className="eyebrow">Query candidates</p>
-              <h2>关键词候选</h2>
+            <div className="category-tabs result-tabs">
+              {sourceTabs.map((category) => (
+                <button
+                  type="button"
+                  key={category}
+                  className={category === siteCategory ? 'active' : ''}
+                  onClick={() => {
+                    setSiteCategory(category)
+                    setResultPage(1)
+                  }}
+                >
+                  {category}
+                </button>
+              ))}
             </div>
-            <span>{parsed.candidates.length} 个候选</span>
-          </div>
 
-          <div className="candidate-grid">
-            {parsed.candidates.map((candidate, index) => (
-              <button
-                className={`candidate-card ${index === selectedIndex ? 'selected' : ''}`}
-                type="button"
-                key={`${candidate.title}-${candidate.author}-${index}`}
-                onClick={() => void chooseCandidate(index)}
-              >
-                <span className="confidence">
-                  {Math.round((candidate.confidence || 0) * 100)}%
+            {resultError ? <div className="bridge-error">{resultError}</div> : null}
+
+            <div className="result-list">
+              {results.length === 0 && !resultError ? (
+                <div className="empty-state">输入检索需求，点击左侧“搜索资料”，结果会直接出现在这里。</div>
+              ) : null}
+              {results.length > 0 && filteredResults.length === 0 && !resultError ? (
+                <div className="empty-state">当前来源分类没有结果，切回“全部来源”可查看完整列表。</div>
+              ) : null}
+              {pagedResults.map((result) => (
+                <article
+                  className={`result-card ${result.meta.includes('兜底') || result.meta.includes('fallback') ? 'fallback' : ''}`}
+                  key={`${result.source}-${result.url}`}
+                >
+                  <div>
+                    <div className="result-titleline">
+                      <span className="result-source">{result.source}</span>
+                      <strong>{result.title}</strong>
+                    </div>
+                    <p>{result.snippet || 'No summary provided.'}</p>
+                    <span className="result-meta">{result.meta}</span>
+                  </div>
+                  <a href={result.url} target="_blank" rel="noreferrer">
+                    打开
+                  </a>
+                </article>
+              ))}
+            </div>
+
+            {filteredResults.length > PAGE_SIZE ? (
+              <div className="pagination-bar">
+                <span>
+                  {pageStart}-{pageEnd} / {filteredResults.length}
                 </span>
-                <strong>{candidate.title}</strong>
-                <small>{candidate.author || '作者待确认'}</small>
-                <p>
-                  {[candidate.publisher, candidate.year, candidate.edition, candidate.isbn]
-                    .filter(Boolean)
-                    .join(' · ') || '版本信息待确认'}
-                </p>
-                <em>{candidate.reason || 'AI 解析候选'}</em>
-              </button>
-            ))}
-          </div>
-
-          <div className="section-head library-head">
-            <div>
-              <p className="eyebrow">Sources</p>
-              <h2>来源矩阵</h2>
-            </div>
-            <span>{siteCategory === ALL_SOURCES ? `${targetSites.length} 个来源` : `${matrixSites.length} 个来源`}</span>
-          </div>
-
-          <div className="site-grid">
-            {matrixSites.map((site) => (
-              <article className="site-card" key={site.name}>
                 <div>
-                  <strong>{site.name}</strong>
-                  <span>{site.category}</span>
-                </div>
-                <p>{site.note}</p>
-                <div className="site-actions">
                   <button
                     type="button"
-                    onClick={() => void runSiteSearch(site.name, site.provider, site.urlTemplate)}
-                    disabled={searchingSite === site.name}
+                    disabled={currentPage <= 1}
+                    onClick={() => setResultPage((page) => Math.max(1, page - 1))}
                   >
-                    {searchingSite === site.name ? '检索中...' : '单站检索'}
+                    上一页
                   </button>
-                  <a
-                    href={buildSearchUrl(site.urlTemplate, routeQuery)}
-                    target="_blank"
-                    rel="noreferrer"
+                  <span>{currentPage} / {totalPages}</span>
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setResultPage((page) => Math.min(totalPages, page + 1))}
                   >
-                    打开站点
-                  </a>
+                    下一页
+                  </button>
                 </div>
-              </article>
-            ))}
-          </div>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="candidates-region">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Query candidates</p>
+                <h2>关键词候选</h2>
+              </div>
+              <span>{parsed.candidates.length} 个候选</span>
+            </div>
+
+            <div className="candidate-grid">
+              {parsed.candidates.map((candidate, index) => (
+                <button
+                  className={`candidate-card ${index === selectedIndex ? 'selected' : ''}`}
+                  type="button"
+                  key={`${candidate.title}-${candidate.author}-${index}`}
+                  onClick={() => void chooseCandidate(index)}
+                >
+                  <span className="confidence">
+                    {Math.round((candidate.confidence || 0) * 100)}%
+                  </span>
+                  <strong>{candidate.title}</strong>
+                  <small>{candidate.author || '作者待确认'}</small>
+                  <p>
+                    {[candidate.publisher, candidate.year, candidate.edition, candidate.isbn]
+                      .filter(Boolean)
+                      .join(' · ') || '版本信息待确认'}
+                  </p>
+                  <em>{candidate.reason || 'AI 解析候选'}</em>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="sources-region">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Sources</p>
+                <h2>来源矩阵</h2>
+              </div>
+              <span>{siteCategory === ALL_SOURCES ? `${targetSites.length} 个来源` : `${matrixSites.length} 个来源`}</span>
+            </div>
+
+            <div className="site-grid">
+              {matrixSites.map((site) => (
+                <article className="site-card" key={site.name}>
+                  <div>
+                    <strong>{site.name}</strong>
+                    <span>{site.category}</span>
+                  </div>
+                  <p>{site.note}</p>
+                  <div className="site-actions">
+                    <button
+                      type="button"
+                      onClick={() => void runSiteSearch(site.name, site.provider, site.urlTemplate)}
+                      disabled={searchingSite === site.name}
+                    >
+                      {searchingSite === site.name ? '检索中...' : '单站检索'}
+                    </button>
+                    <a
+                      href={buildSearchUrl(site.urlTemplate, routeQuery)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      打开站点
+                    </a>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
         </section>
       </section>
     </main>
