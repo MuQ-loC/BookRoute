@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const PORT = Number(process.env.PORT || 8787)
+const PROVIDERS_PATH = path.join(process.cwd(), 'providers.local.json')
+const PROVIDERS_EXAMPLE_PATH = path.join(process.cwd(), 'providers.example.json')
 loadEnvFile()
 loadWorkspaceKeys()
 
@@ -101,6 +103,67 @@ function sendJson(res, status, payload) {
     'access-control-allow-headers': 'content-type',
   })
   res.end(JSON.stringify(payload))
+}
+
+function maskKey(key = '') {
+  if (!key) return ''
+  if (key.length <= 10) return `${key.slice(0, 2)}***`
+  return `${key.slice(0, 6)}...${key.slice(-4)}`
+}
+
+function normalizeProvider(provider, index = 0) {
+  const type = provider.type === 'openai' ? 'cloud' : provider.type || 'cloud'
+  return {
+    id: provider.id || `provider-${index + 1}`,
+    name: provider.name || provider.id || `Provider ${index + 1}`,
+    type,
+    model: provider.model || '',
+    baseUrl: provider.baseUrl || (type === 'ollama' ? OLLAMA_BASE_URL : ''),
+    apiKey: provider.apiKey || '',
+  }
+}
+
+function readProviderFile(filePath) {
+  if (!fs.existsSync(filePath)) return []
+  try {
+    const providers = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, ''))
+    return Array.isArray(providers) ? providers.map(normalizeProvider) : []
+  } catch {
+    return []
+  }
+}
+
+function ensureLocalProviders() {
+  if (fs.existsSync(PROVIDERS_PATH)) return
+  const defaults = readProviderFile(PROVIDERS_EXAMPLE_PATH)
+  if (defaults.length > 0) {
+    fs.writeFileSync(PROVIDERS_PATH, JSON.stringify(defaults, null, 2), 'utf8')
+  }
+}
+
+function loadProviders({ includeSecrets = false } = {}) {
+  ensureLocalProviders()
+  return readProviderFile(PROVIDERS_PATH).map((provider) => {
+    if (includeSecrets) return provider
+    return {
+      ...provider,
+      apiKey: '',
+      hasApiKey: Boolean(provider.apiKey),
+      apiKeyMasked: maskKey(provider.apiKey),
+    }
+  })
+}
+
+function providerFromPayload(provider = {}) {
+  const localProviders = loadProviders({ includeSecrets: true })
+  const localProvider = provider.id
+    ? localProviders.find((item) => item.id === provider.id)
+    : undefined
+  return {
+    ...(localProvider || {}),
+    ...provider,
+    apiKey: provider.apiKey || localProvider?.apiKey || '',
+  }
 }
 
 function stripHtml(value = '') {
@@ -311,11 +374,12 @@ async function parseWithOllama(text, provider = {}) {
 
 async function parseWithAI(text, provider = {}) {
   const errors = []
-  const type = provider.type || 'auto'
+  const resolvedProvider = providerFromPayload(provider)
+  const type = resolvedProvider.type || 'auto'
 
-  if ((type === 'cloud' || type === 'auto') && (provider.apiKey || DEEPSEEK_API_KEY)) {
+  if ((type === 'cloud' || type === 'auto') && (resolvedProvider.apiKey || DEEPSEEK_API_KEY)) {
     try {
-      return await parseWithCloudLLM(text, provider)
+      return await parseWithCloudLLM(text, resolvedProvider)
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error))
     }
@@ -323,7 +387,7 @@ async function parseWithAI(text, provider = {}) {
 
   if (type === 'ollama' || type === 'auto') {
     try {
-      return await parseWithOllama(text, provider)
+      return await parseWithOllama(text, resolvedProvider)
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error))
     }
@@ -476,6 +540,11 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : 'Search failed' })
       }
     })
+    return
+  }
+
+  if (req.method === 'GET' && req.url === '/api/providers') {
+    sendJson(res, 200, { ok: true, providers: loadProviders() })
     return
   }
 

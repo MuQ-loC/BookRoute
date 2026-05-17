@@ -6,11 +6,14 @@ import { buildSearchUrl, targetCategories, targetSites } from './data/targetSite
 type ProviderType = 'auto' | 'ollama' | 'cloud'
 
 type ProviderConfig = {
+  id?: string
   type: ProviderType
   name: string
   baseUrl: string
   model: string
   apiKey: string
+  hasApiKey?: boolean
+  apiKeyMasked?: string
 }
 
 type BookCandidate = {
@@ -47,6 +50,8 @@ type SearchResult = {
 
 const AI_BRIDGE_URL =
   import.meta.env.VITE_AI_BRIDGE_URL || 'http://127.0.0.1:8787/api/parse-book-query'
+const AI_PROVIDER_URL =
+  import.meta.env.VITE_AI_PROVIDER_URL || 'http://127.0.0.1:8787/api/providers'
 
 const defaultProvider: ProviderConfig = {
   type: 'auto',
@@ -192,9 +197,17 @@ async function searchPublic(provider: string, keyword: string): Promise<SearchRe
   return data.results || []
 }
 
+async function loadServerProviders(): Promise<ProviderConfig[]> {
+  const response = await fetch(AI_PROVIDER_URL)
+  if (!response.ok) return []
+  const data = await response.json()
+  return Array.isArray(data.providers) ? data.providers : []
+}
+
 function App() {
   const [input, setInput] = useState('我想找那本机器学习实战，正版二手也行，作者好像是 Peter')
   const [provider, setProvider] = useState<ProviderConfig>(() => loadProvider())
+  const [serverProviders, setServerProviders] = useState<ProviderConfig[]>([])
   const [showKey, setShowKey] = useState(false)
   const [parsed, setParsed] = useState<ParsedQuery>(() => fallbackParse(input))
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -207,6 +220,20 @@ function App() {
   useEffect(() => {
     localStorage.setItem('bookroute-provider', JSON.stringify(provider))
   }, [provider])
+
+  useEffect(() => {
+    let cancelled = false
+    loadServerProviders()
+      .then((next) => {
+        if (!cancelled && next.length > 0) setServerProviders(next)
+      })
+      .catch(() => {
+        if (!cancelled) setServerProviders([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const selected = parsed.candidates[selectedIndex] || parsed.candidates[0] || {
     title: parsed.title,
@@ -232,11 +259,13 @@ function App() {
     }
   }
 
+  const visibleProviders = serverProviders.length > 0 ? serverProviders : providerPresets
+
   const applyPreset = (preset: ProviderConfig) => {
     setProvider((current) => ({
       ...current,
       ...preset,
-      apiKey: current.apiKey,
+      apiKey: preset.hasApiKey ? '' : current.apiKey,
     }))
   }
 
@@ -289,13 +318,13 @@ function App() {
           <section className="provider-panel">
             <div className="section-minihead">
               <h2>API / 本地模型配置</h2>
-              <span>保存在浏览器本地</span>
+              <span>{serverProviders.length > 0 ? '已读取本地 providers' : '保存在浏览器本地'}</span>
             </div>
 
             <div className="preset-row">
-              {providerPresets.map((preset) => (
+              {visibleProviders.map((preset) => (
                 <button type="button" key={preset.name} onClick={() => applyPreset(preset)}>
-                  {preset.name}
+                  {preset.hasApiKey ? `${preset.name} · key ${preset.apiKeyMasked}` : preset.name}
                 </button>
               ))}
             </div>
@@ -339,7 +368,7 @@ function App() {
                   type={showKey ? 'text' : 'password'}
                   value={provider.apiKey}
                   onChange={(event) => setProvider((current) => ({ ...current, apiKey: event.target.value }))}
-                  placeholder="本地 Ollama 可留空"
+                  placeholder={provider.hasApiKey ? `已保存 ${provider.apiKeyMasked}` : '本地 Ollama 可留空'}
                 />
                 <button type="button" onClick={() => setShowKey((value) => !value)}>
                   {showKey ? '隐藏' : '显示'}

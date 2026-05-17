@@ -65,6 +65,16 @@ npm run server
 
 The bridge tries cloud LLM first if configured, then local Ollama Qwen. Local string parsing is only a failure mode.
 
+## Local Providers
+
+BookRoute can load local model/API presets from:
+
+```text
+providers.local.json
+```
+
+Copy `providers.example.json` to `providers.local.json` and fill API keys locally. The server exposes only masked key status to the browser; full keys stay on the backend and are ignored by git.
+
 ## Legal Boundary
 
 BookRoute is designed as a lawful discovery and acquisition assistant.

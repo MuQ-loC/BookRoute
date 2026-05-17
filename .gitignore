@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+providers.local.json
 .env
 .env.*
 !.env.example
