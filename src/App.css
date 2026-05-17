@@ -80,17 +80,19 @@ form {
   gap: 12px;
 }
 
-label {
+.control-panel label {
+  display: grid;
+  gap: 8px;
   color: #273246;
   font-size: 14px;
   font-weight: 800;
 }
 
-textarea {
+textarea,
+input,
+select {
   width: 100%;
   box-sizing: border-box;
-  resize: vertical;
-  min-height: 132px;
   border: 1px solid #c9d1df;
   border-radius: 8px;
   padding: 12px;
@@ -100,7 +102,18 @@ textarea {
   line-height: 1.5;
 }
 
+textarea {
+  resize: vertical;
+  min-height: 132px;
+}
+
 textarea:focus {
+  border-color: #2c6ce0;
+  outline: 3px solid rgba(44, 108, 224, 0.14);
+}
+
+input:focus,
+select:focus {
   border-color: #2c6ce0;
   outline: 3px solid rgba(44, 108, 224, 0.14);
 }
@@ -189,6 +202,58 @@ button:disabled {
   padding: 12px;
   font-size: 13px;
   font-weight: 800;
+}
+
+.provider-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+  border: 1px solid #dfe3ec;
+  border-radius: 8px;
+  padding: 16px;
+  background: #f8fafd;
+}
+
+.section-minihead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-minihead h2 {
+  font-size: 16px;
+}
+
+.section-minihead span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-row button {
+  border: 1px solid #d4dbea;
+  background: #ffffff;
+  color: #40516d;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.secret-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  gap: 8px;
+}
+
+.secret-row button {
+  padding: 0 10px;
+  font-size: 13px;
 }
 
 .ai-required {

@@ -239,15 +239,20 @@ function mergeCandidates(candidates) {
   return result.slice(0, 6)
 }
 
-async function parseWithCloudLLM(text) {
-  const response = await fetch(`${DEEPSEEK_BASE_URL.replace(/\/$/, '')}/chat/completions`, {
+async function parseWithCloudLLM(text, provider = {}) {
+  const apiKey = provider.apiKey || DEEPSEEK_API_KEY
+  const baseUrl = provider.baseUrl || DEEPSEEK_BASE_URL
+  const model = provider.model || DEEPSEEK_MODEL
+  if (!apiKey) throw new Error('Cloud LLM key missing')
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+      authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
+      model,
       temperature: 0,
       response_format: { type: 'json_object' },
       messages: [
@@ -270,12 +275,14 @@ async function parseWithCloudLLM(text) {
   return normalizeAiParse(text, parseJsonObject(content), 'cloud')
 }
 
-async function parseWithOllama(text) {
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+async function parseWithOllama(text, provider = {}) {
+  const baseUrl = (provider.baseUrl || OLLAMA_BASE_URL).replace(/\/$/, '')
+  const model = provider.model || OLLAMA_MODEL
+  const response = await fetch(`${baseUrl}/api/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
+      model,
       prompt: buildBookParsePrompt(text),
       stream: false,
       format: 'json',
@@ -290,21 +297,24 @@ async function parseWithOllama(text) {
   return normalizeAiParse(text, parseJsonObject(data.response), 'ollama')
 }
 
-async function parseWithAI(text) {
+async function parseWithAI(text, provider = {}) {
   const errors = []
+  const type = provider.type || 'auto'
 
-  if (DEEPSEEK_API_KEY) {
+  if ((type === 'cloud' || type === 'auto') && (provider.apiKey || DEEPSEEK_API_KEY)) {
     try {
-      return await parseWithCloudLLM(text)
+      return await parseWithCloudLLM(text, provider)
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error))
     }
   }
 
-  try {
-    return await parseWithOllama(text)
-  } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error))
+  if (type === 'ollama' || type === 'auto') {
+    try {
+      return await parseWithOllama(text, provider)
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+    }
   }
 
   return {
@@ -336,7 +346,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { error: 'text is required' })
         return
       }
-      const parsed = await parseWithAI(text)
+      const parsed = await parseWithAI(text, payload.provider || {})
       sendJson(res, 200, parsed)
     } catch (error) {
       sendJson(res, 500, { error: error instanceof Error ? error.message : 'Server error' })
