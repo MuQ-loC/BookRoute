@@ -48,12 +48,22 @@ type SearchResult = {
   meta: string
 }
 
+type SavedSession = {
+  input?: string
+  parsed?: ParsedQuery
+  selectedIndex?: number
+  siteCategory?: string
+  resultPage?: number
+  results?: SearchResult[]
+}
+
 const AI_BRIDGE_URL =
   import.meta.env.VITE_AI_BRIDGE_URL || 'http://127.0.0.1:8787/api/parse-book-query'
 const AI_PROVIDER_URL =
   import.meta.env.VITE_AI_PROVIDER_URL || 'http://127.0.0.1:8787/api/providers'
 const ALL_SOURCES = '全部来源'
 const PAGE_SIZE = 8
+const SESSION_KEY = 'bookroute-session'
 
 const defaultProvider: ProviderConfig = {
   type: 'auto',
@@ -163,6 +173,21 @@ function loadProvider() {
   }
 }
 
+function loadSavedSession(): SavedSession {
+  try {
+    const saved = localStorage.getItem(SESSION_KEY)
+    if (!saved) return {}
+    const session = JSON.parse(saved) as SavedSession
+    return {
+      ...session,
+      parsed: session.parsed && Array.isArray(session.parsed.candidates) ? session.parsed : undefined,
+      results: Array.isArray(session.results) ? session.results : [],
+    }
+  } catch {
+    return {}
+  }
+}
+
 async function parseWithBridge(text: string, provider: ProviderConfig): Promise<ParsedQuery> {
   try {
     const response = await fetch(AI_BRIDGE_URL, {
@@ -230,21 +255,54 @@ async function loadServerProviders(): Promise<ProviderConfig[]> {
 }
 
 function App() {
-  const [input, setInput] = useState('我想找那本机器学习实战，正版二手也行，作者好像是 Peter')
+  const initialSession = useMemo(() => loadSavedSession(), [])
+  const [input, setInput] = useState(initialSession.input || '我想找那本机器学习实战，正版二手也行，作者好像是 Peter')
   const [provider, setProvider] = useState<ProviderConfig>(() => loadProvider())
   const [serverProviders, setServerProviders] = useState<ProviderConfig[]>([])
   const [showKey, setShowKey] = useState(false)
-  const [parsed, setParsed] = useState<ParsedQuery>(() => fallbackParse(input))
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [siteCategory, setSiteCategory] = useState(ALL_SOURCES)
+  const [parsed, setParsed] = useState<ParsedQuery>(() => initialSession.parsed || fallbackParse(input))
+  const [selectedIndex, setSelectedIndex] = useState(initialSession.selectedIndex || 0)
+  const [siteCategory, setSiteCategory] = useState(initialSession.siteCategory || ALL_SOURCES)
   const [loading, setLoading] = useState(false)
   const [searchingSite, setSearchingSite] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
+  const [results, setResults] = useState<SearchResult[]>(initialSession.results || [])
   const [resultError, setResultError] = useState('')
+  const [resultPage, setResultPage] = useState(initialSession.resultPage || 1)
 
   useEffect(() => {
     localStorage.setItem('bookroute-provider', JSON.stringify(provider))
   }, [provider])
+
+  useEffect(() => {
+    const payload: SavedSession = {
+      input,
+      parsed,
+      selectedIndex,
+      siteCategory,
+      resultPage,
+      results,
+    }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(payload))
+  }, [input, parsed, selectedIndex, siteCategory, resultPage, results])
+
+  useEffect(() => {
+    const syncSession = (event: StorageEvent) => {
+      if (event.key !== SESSION_KEY || !event.newValue) return
+      try {
+        const session = JSON.parse(event.newValue) as SavedSession
+        if (typeof session.input === 'string') setInput(session.input)
+        if (session.parsed && Array.isArray(session.parsed.candidates)) setParsed(session.parsed)
+        if (typeof session.selectedIndex === 'number') setSelectedIndex(session.selectedIndex)
+        if (typeof session.siteCategory === 'string') setSiteCategory(session.siteCategory)
+        if (typeof session.resultPage === 'number') setResultPage(session.resultPage)
+        if (Array.isArray(session.results)) setResults(session.results)
+      } catch {
+        // Ignore malformed cross-tab updates.
+      }
+    }
+    window.addEventListener('storage', syncSession)
+    return () => window.removeEventListener('storage', syncSession)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -283,7 +341,6 @@ function App() {
       : results.filter((result) => resultCategoryBySource.get(result.source) === siteCategory)),
     [resultCategoryBySource, results, siteCategory],
   )
-  const [resultPage, setResultPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(filteredResults.length / PAGE_SIZE))
   const currentPage = Math.min(resultPage, totalPages)
   const pageStart = filteredResults.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
