@@ -197,6 +197,23 @@ async function searchPublic(provider: string, keyword: string): Promise<SearchRe
   return data.results || []
 }
 
+async function searchAllPublic(keyword: string): Promise<SearchResult[]> {
+  const sites = targetSites.map((site) => ({
+    name: site.name,
+    provider: site.provider,
+    urlTemplate: site.urlTemplate,
+  }))
+  const response = await fetch('http://127.0.0.1:8787/api/search-all-public', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ keyword, sites }),
+  })
+  if (!response.ok) throw new Error('Aggregate search failed')
+  const data = await response.json()
+  if (!data.ok) throw new Error(data.error || 'Aggregate search failed')
+  return data.results || []
+}
+
 async function loadServerProviders(): Promise<ProviderConfig[]> {
   const response = await fetch(AI_PROVIDER_URL)
   if (!response.ok) return []
@@ -214,6 +231,7 @@ function App() {
   const [siteCategory, setSiteCategory] = useState('Code & Open Source')
   const [loading, setLoading] = useState(false)
   const [searchingSite, setSearchingSite] = useState('')
+  const [searchingAll, setSearchingAll] = useState(false)
   const [results, setResults] = useState<SearchResult[]>([])
   const [resultError, setResultError] = useState('')
 
@@ -269,11 +287,19 @@ function App() {
     }))
   }
 
-  const runSiteSearch = async (siteName: string, siteProvider?: string) => {
+  const runSiteSearch = async (siteName: string, siteProvider?: string, urlTemplate?: string) => {
     setResultError('')
     setResults([])
     if (!siteProvider) {
-      setResultError(`${siteName} 暂时只提供手动打开入口。`)
+      setResults([
+        {
+          title: `${siteName} search page for "${routeQuery}"`,
+          url: buildSearchUrl(urlTemplate || '', routeQuery),
+          source: siteName,
+          snippet: 'This site has no stable public result API configured. Open this search page from the same normalized keyword.',
+          meta: 'fallback search page',
+        },
+      ])
       return
     }
     setSearchingSite(siteName)
@@ -284,6 +310,20 @@ function App() {
       setResultError(error instanceof Error ? error.message : 'Search failed')
     } finally {
       setSearchingSite('')
+    }
+  }
+
+  const runAllSearch = async () => {
+    setResultError('')
+    setResults([])
+    setSearchingAll(true)
+    try {
+      const next = await searchAllPublic(routeQuery)
+      setResults(next)
+    } catch (error) {
+      setResultError(error instanceof Error ? error.message : 'Aggregate search failed')
+    } finally {
+      setSearchingAll(false)
     }
   }
 
@@ -445,7 +485,14 @@ function App() {
               <p className="eyebrow">Target site matrix</p>
               <h2>公开站点搜索矩阵</h2>
             </div>
-            <span>{targetSites.length} 个入口</span>
+            <button
+              className="compact-action"
+              type="button"
+              onClick={() => void runAllSearch()}
+              disabled={searchingAll}
+            >
+              {searchingAll ? '聚合中...' : `一键聚合 ${targetSites.length} 个站点`}
+            </button>
           </div>
 
           <div className="category-tabs">
@@ -470,15 +517,13 @@ function App() {
                 </div>
                 <p>{site.note}</p>
                 <div className="site-actions">
-                  {site.searchable ? (
-                    <button
-                      type="button"
-                      onClick={() => void runSiteSearch(site.name, site.provider)}
-                      disabled={searchingSite === site.name}
-                    >
-                      {searchingSite === site.name ? '搜索中...' : '返回结果'}
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void runSiteSearch(site.name, site.provider, site.urlTemplate)}
+                    disabled={searchingSite === site.name}
+                  >
+                    {searchingSite === site.name ? '搜索中...' : '返回结果'}
+                  </button>
                   <a
                     href={buildSearchUrl(site.urlTemplate, routeQuery)}
                     target="_blank"
@@ -503,7 +548,7 @@ function App() {
 
           <div className="result-list">
             {results.length === 0 && !resultError ? (
-              <div className="empty-state">选择支持 API 的站点，点击“返回结果”，这里会显示标题、摘要、来源和可打开链接。</div>
+              <div className="empty-state">点击“一键聚合”或任意站点的“返回结果”，这里会显示标题、摘要、来源和可打开链接。</div>
             ) : null}
             {results.map((result) => (
               <article className="result-card" key={`${result.source}-${result.url}`}>

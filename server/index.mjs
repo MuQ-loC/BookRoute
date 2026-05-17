@@ -504,6 +504,48 @@ async function searchPublic(provider, keyword) {
   throw new Error(`Provider ${provider} is manual-only`)
 }
 
+function buildUrlFromTemplate(template = '', keyword = '') {
+  return template.includes('{keyword}')
+    ? template.replace('{keyword}', encodeURIComponent(keyword))
+    : template
+}
+
+async function searchSite(site, keyword) {
+  const provider = String(site.provider || '')
+  if (provider) return searchPublic(provider, keyword)
+
+  return [
+    buildSearchPageResult(
+      site.name || 'Search site',
+      buildUrlFromTemplate(site.urlTemplate || '', keyword),
+      keyword,
+      'This site has no stable public result API configured.',
+    ),
+  ]
+}
+
+async function searchAllPublic(sites, keyword) {
+  const safeSites = Array.isArray(sites) ? sites.slice(0, 80) : []
+  const batches = await Promise.all(
+    safeSites.map(async (site) => {
+      try {
+        return await searchSite(site, keyword)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Search failed'
+        return [
+          buildSearchPageResult(
+            site.name || 'Search site',
+            buildUrlFromTemplate(site.urlTemplate || '', keyword),
+            keyword,
+            message,
+          ),
+        ]
+      }
+    }),
+  )
+  return batches.flat()
+}
+
 function buildSearchPageResult(source, url, keyword, reason) {
   return {
     title: `${source} search page for "${keyword}"`,
@@ -536,6 +578,28 @@ const server = http.createServer(async (req, res) => {
         }
         const results = await searchPublic(provider, keyword)
         sendJson(res, 200, { ok: true, provider, keyword, results })
+      } catch (error) {
+        sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : 'Search failed' })
+      }
+    })
+    return
+  }
+
+  if (req.method === 'POST' && req.url === '/api/search-all-public') {
+    let body = ''
+    req.on('data', (chunk) => {
+      body += chunk
+    })
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}')
+        const keyword = String(payload.keyword || '').slice(0, 200)
+        if (!keyword.trim()) {
+          sendJson(res, 400, { error: 'keyword is required' })
+          return
+        }
+        const results = await searchAllPublic(payload.sites || [], keyword)
+        sendJson(res, 200, { ok: true, keyword, results })
       } catch (error) {
         sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : 'Search failed' })
       }
