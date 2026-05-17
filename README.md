@@ -28,8 +28,8 @@ This project turns that into a small public tool that can be shown on GitHub and
 
 ## Features
 
-- Natural-language query parsing
-- Optional DeepSeek bridge for title / author / ISBN / intent extraction
+- AI-first natural-language book disambiguation
+- DeepSeek bridge for title / author / publisher / year / ISBN / edition candidates
 - Built-in piracy-intent blocker
 - Open Library API search
 - Legal route cards
@@ -51,7 +51,7 @@ Open:
 http://localhost:5173
 ```
 
-Optional AI bridge:
+AI bridge:
 
 ```powershell
 Copy-Item .env.example .env
@@ -59,7 +59,7 @@ Copy-Item .env.example .env
 npm run server
 ```
 
-The frontend falls back to local parsing if the bridge is not running.
+The frontend can fall back to local parsing if the bridge is not running, but real product value depends on the AI bridge. Local parsing is only a failure mode.
 
 ## Legal Boundary
 
@@ -114,7 +114,9 @@ Starter pricing:
 ```text
 User query
   -> React frontend
-  -> optional local DeepSeek bridge
+  -> local DeepSeek bridge
+  -> AI book candidates with author / publisher / year / ISBN / confidence
+  -> user selects exact candidate
   -> piracy intent check
   -> Open Library / public legal routes
   -> route cards
@@ -134,4 +136,3 @@ PORT=8787
 - Open Library Search API: https://openlibrary.org/dev/docs/api/search
 - Gutendex API: https://gutendex.com/
 - DeepSeek API docs: https://api-docs.deepseek.com/
-

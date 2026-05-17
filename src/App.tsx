@@ -17,9 +17,14 @@ type BookRoute = {
 type BookCandidate = {
   title: string
   author: string
+  publisher?: string
   year?: string
+  isbn?: string
+  edition?: string
+  confidence?: number
+  reason?: string
   cover?: string
-  source: string
+  source?: string
 }
 
 type ParsedQuery = {
@@ -28,6 +33,12 @@ type ParsedQuery = {
   isbn?: string
   intent: 'buy' | 'borrow' | 'open_access' | 'unknown'
   risk: 'clean' | 'piracy_requested'
+  normalizedQuery?: string
+  aiEnabled?: boolean
+  needsAiKey?: boolean
+  source?: 'deepseek' | 'fallback'
+  error?: string
+  candidates: BookCandidate[]
 }
 
 const AI_BRIDGE_URL =
@@ -56,9 +67,10 @@ const cleanSearch = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim()
 
-const parseQuery = (raw: string): ParsedQuery => {
+const fallbackParse = (raw: string): ParsedQuery => {
   const normalized = raw.trim()
   const lower = normalized.toLowerCase()
+  const title = cleanSearch(normalized) || normalized
   const risk = piracyTerms.some((term) => lower.includes(term.toLowerCase()))
     ? 'piracy_requested'
     : 'clean'
@@ -69,20 +81,33 @@ const parseQuery = (raw: string): ParsedQuery => {
       : lower.includes('买') || lower.includes('购买') || lower.includes('二手')
         ? 'buy'
         : 'unknown'
-
-  const isbnMatch = normalized.match(/97[89][-\d\s]{10,17}/)
+  const isbn = normalized.match(/97[89][-\d\s]{10,17}/)?.[0]?.replace(/[^\dXx]/g, '')
 
   return {
-    title: cleanSearch(normalized) || normalized,
-    isbn: isbnMatch?.[0]?.replace(/[^\dXx]/g, ''),
+    title,
+    isbn,
     intent,
     risk,
+    aiEnabled: false,
+    needsAiKey: true,
+    source: 'fallback',
+    error: 'AI bridge is not configured. Set DEEPSEEK_API_KEY or BOOKROUTE_LLM_API_KEY.',
+    candidates: [
+      {
+        title,
+        author: '',
+        isbn,
+        confidence: 0.25,
+        reason: 'AI bridge unavailable. This local result is only a fallback.',
+      },
+    ],
   }
 }
 
-const buildRoutes = (query: ParsedQuery): BookRoute[] => {
-  const encoded = encodeURIComponent(query.isbn || query.title)
-  const titleEncoded = encodeURIComponent(query.title)
+const buildRoutes = (query: ParsedQuery, selected: BookCandidate): BookRoute[] => {
+  const routeQuery = selected.isbn || `${selected.title} ${selected.author || ''}`.trim()
+  const encoded = encodeURIComponent(routeQuery)
+  const titleEncoded = encodeURIComponent(selected.title || query.title)
 
   const legalRoutes: BookRoute[] = [
     {
@@ -131,12 +156,12 @@ const buildRoutes = (query: ParsedQuery): BookRoute[] => {
       priceHint: '免费合法',
     },
     {
-      name: '京东 / 当当 / 淘宝',
+      name: '正版 / 二手购买搜索',
       type: '正版新书 / 二手入口',
       status: 'manual',
-      description: '只生成搜索入口，购买前人工确认店铺、版权和版本。',
+      description: '生成购买搜索入口，付款前人工确认店铺、版权、版本和品相。',
       actionLabel: '搜索购买',
-      url: `https://www.google.com/search?q=${titleEncoded}+正版+二手+购买`,
+      url: `https://www.google.com/search?q=${encodeURIComponent(`${routeQuery} 正版 二手 购买`)}`,
       priceHint: '按平台价格',
     },
   ]
@@ -158,10 +183,10 @@ const buildRoutes = (query: ParsedQuery): BookRoute[] => {
   return legalRoutes
 }
 
-async function searchOpenLibrary(query: ParsedQuery): Promise<BookCandidate[]> {
+async function searchOpenLibrary(candidate: BookCandidate): Promise<BookCandidate[]> {
   const params = new URLSearchParams()
-  if (query.isbn) params.set('isbn', query.isbn)
-  else params.set('q', query.title)
+  if (candidate.isbn) params.set('isbn', candidate.isbn)
+  else params.set('q', `${candidate.title} ${candidate.author || ''}`.trim())
   params.set('limit', '6')
 
   const response = await fetch(`https://openlibrary.org/search.json?${params}`)
@@ -172,6 +197,7 @@ async function searchOpenLibrary(query: ParsedQuery): Promise<BookCandidate[]> {
     title: doc.title || 'Untitled',
     author: doc.author_name?.slice(0, 2).join(', ') || 'Unknown author',
     year: doc.first_publish_year ? String(doc.first_publish_year) : undefined,
+    isbn: doc.isbn?.[0],
     cover: doc.cover_i
       ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
       : undefined,
@@ -186,43 +212,58 @@ async function parseWithBridge(text: string): Promise<ParsedQuery> {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text }),
     })
-    if (!response.ok) return parseQuery(text)
+    if (!response.ok) return fallbackParse(text)
     const data = await response.json()
+    const fallback = fallbackParse(text)
     return {
-      ...parseQuery(text),
-      title: data.title || parseQuery(text).title,
-      author: data.author || '',
-      isbn: data.isbn || parseQuery(text).isbn,
-      intent: data.intent || parseQuery(text).intent,
-      risk: data.risk === 'piracy_requested' ? 'piracy_requested' : parseQuery(text).risk,
+      ...fallback,
+      ...data,
+      title: data.title || fallback.title,
+      author: data.author || fallback.author,
+      isbn: data.isbn || fallback.isbn,
+      intent: data.intent || fallback.intent,
+      risk: data.risk === 'piracy_requested' ? 'piracy_requested' : fallback.risk,
+      candidates: Array.isArray(data.candidates) && data.candidates.length > 0
+        ? data.candidates
+        : fallback.candidates,
+      error: data.error,
+      aiEnabled: Boolean(data.aiEnabled),
+      needsAiKey: Boolean(data.needsAiKey),
     }
   } catch {
-    return parseQuery(text)
+    return fallbackParse(text)
   }
 }
 
 function App() {
-  const [input, setInput] = useState('机器学习实战 正版 二手')
-  const [parsed, setParsed] = useState<ParsedQuery>(() => parseQuery(input))
-  const [candidates, setCandidates] = useState<BookCandidate[]>([])
+  const [input, setInput] = useState('我想找那本机器学习实战，正版二手也行，作者好像是 Peter')
+  const [parsed, setParsed] = useState<ParsedQuery>(() => fallbackParse(input))
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [libraryMatches, setLibraryMatches] = useState<BookCandidate[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const routes = useMemo(() => buildRoutes(parsed), [parsed])
+  const selected = parsed.candidates[selectedIndex] || parsed.candidates[0] || {
+    title: parsed.title,
+    author: parsed.author || '',
+    isbn: parsed.isbn,
+  }
+  const routes = useMemo(() => buildRoutes(parsed, selected), [parsed, selected])
   const blocked = parsed.risk === 'piracy_requested'
 
   const runSearch = async (event?: FormEvent) => {
     event?.preventDefault()
     setError('')
-    setCandidates([])
-
+    setLibraryMatches([])
+    setSelectedIndex(0)
     setLoading(true)
     try {
       const next = await parseWithBridge(input)
       setParsed(next)
-      if (!next.title) return
-      const results = await searchOpenLibrary(next)
-      setCandidates(results)
+      const first = next.candidates[0] || { title: next.title, author: next.author || '', isbn: next.isbn }
+      if (!first.title) return
+      const results = await searchOpenLibrary(first)
+      setLibraryMatches(results)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed')
     } finally {
@@ -230,14 +271,28 @@ function App() {
     }
   }
 
+  const selectCandidate = async (index: number) => {
+    setSelectedIndex(index)
+    setError('')
+    setLibraryMatches([])
+    try {
+      const results = await searchOpenLibrary(parsed.candidates[index])
+      setLibraryMatches(results)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Open Library search failed')
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="topbar">
         <div>
-          <p className="eyebrow">BookRoute MVP</p>
+          <p className="eyebrow">BookRoute AI-first MVP</p>
           <h1>合法找书与采购路线助手</h1>
         </div>
-        <div className="status-pill">AI bridge ready</div>
+        <div className={parsed.aiEnabled ? 'status-pill' : 'status-pill warning'}>
+          {parsed.aiEnabled ? 'AI parser online' : 'AI key missing'}
+        </div>
       </section>
 
       <section className="workspace">
@@ -252,18 +307,29 @@ function App() {
               placeholder="例如：想买 机器学习实战 正版二手，最好便宜一点"
             />
             <button type="submit" disabled={loading}>
-              {loading ? '查询中...' : '生成合法路线'}
+              {loading ? 'AI 识别中...' : 'AI 识别书目并生成路线'}
             </button>
           </form>
 
+          {parsed.needsAiKey ? (
+            <div className="ai-required">
+              这个产品必须接 AI 才有意义。请在本地 .env 配置 DEEPSEEK_API_KEY 或
+              BOOKROUTE_LLM_API_KEY。
+            </div>
+          ) : null}
+
           <div className="parsed-box">
             <div>
-              <span>识别书名</span>
+              <span>AI 识别书名</span>
               <strong>{parsed.title || '未识别'}</strong>
             </div>
             <div>
+              <span>作者</span>
+              <strong>{parsed.author || selected.author || '未提供'}</strong>
+            </div>
+            <div>
               <span>ISBN</span>
-              <strong>{parsed.isbn || '未提供'}</strong>
+              <strong>{parsed.isbn || selected.isbn || '未提供'}</strong>
             </div>
             <div>
               <span>意图</span>
@@ -277,17 +343,50 @@ function App() {
             </div>
           </div>
 
+          {parsed.error ? <div className="bridge-error">{parsed.error}</div> : null}
+
           <div className="policy-card">
             <h2>边界</h2>
             <p>
-              不返回网盘盗版链接、提取码、代下资源，不自动购买或转存疑似侵权内容。
-              可以做正版新书、二手书、公版书、开放获取和图书馆路线。
+              AI 负责识别准确书目和版本，不返回网盘盗版链接、提取码、代下资源，
+              不自动购买或转存疑似侵权内容。
             </p>
           </div>
         </aside>
 
         <section className="results-panel">
           <div className="section-head">
+            <div>
+              <p className="eyebrow">AI candidates</p>
+              <h2>AI 书目候选</h2>
+            </div>
+            <span>{parsed.candidates.length} 个候选</span>
+          </div>
+
+          <div className="candidate-grid">
+            {parsed.candidates.map((candidate, index) => (
+              <button
+                className={`candidate-card ${index === selectedIndex ? 'selected' : ''}`}
+                type="button"
+                key={`${candidate.title}-${candidate.author}-${index}`}
+                onClick={() => void selectCandidate(index)}
+              >
+                <span className="confidence">
+                  {Math.round((candidate.confidence || 0) * 100)}%
+                </span>
+                <strong>{candidate.title}</strong>
+                <small>{candidate.author || '作者待确认'}</small>
+                <p>
+                  {[candidate.publisher, candidate.year, candidate.edition, candidate.isbn]
+                    .filter(Boolean)
+                    .join(' · ') || '版本信息待确认'}
+                </p>
+                <em>{candidate.reason || 'AI 解析候选'}</em>
+              </button>
+            ))}
+          </div>
+
+          <div className="section-head library-head">
             <div>
               <p className="eyebrow">Route plan</p>
               <h2>可执行路线</h2>
@@ -329,17 +428,17 @@ function App() {
           <div className="section-head library-head">
             <div>
               <p className="eyebrow">Bibliography</p>
-              <h2>书目候选</h2>
+              <h2>公开书目匹配</h2>
             </div>
             {error && <span className="error-text">{error}</span>}
           </div>
 
           <div className="book-list">
-            {candidates.length === 0 && !loading ? (
-              <div className="empty-state">点击查询后，这里会显示公开书目候选。</div>
+            {libraryMatches.length === 0 && !loading ? (
+              <div className="empty-state">AI 识别后，这里会显示 Open Library 书目匹配。</div>
             ) : null}
-            {candidates.map((book) => (
-              <article className="book-row" key={`${book.title}-${book.author}-${book.year}`}>
+            {libraryMatches.map((book) => (
+              <article className="book-row" key={`${book.title}-${book.author}-${book.year}-${book.isbn}`}>
                 <div className="cover">
                   {book.cover ? <img src={book.cover} alt="" /> : <span>No cover</span>}
                 </div>
@@ -349,6 +448,7 @@ function App() {
                   <span>
                     {book.source}
                     {book.year ? ` · ${book.year}` : ''}
+                    {book.isbn ? ` · ${book.isbn}` : ''}
                   </span>
                 </div>
               </article>

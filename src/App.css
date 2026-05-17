@@ -56,6 +56,12 @@ h3 {
   font-weight: 700;
 }
 
+.status-pill.warning {
+  border-color: #ead7aa;
+  background: #fff9ec;
+  color: #8a5a11;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
@@ -174,6 +180,29 @@ button:disabled {
   line-height: 1.7;
 }
 
+.bridge-error {
+  margin-top: 12px;
+  border: 1px solid #f2b8b5;
+  border-radius: 8px;
+  background: #fff7f6;
+  color: #b42318;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ai-required {
+  margin-top: 14px;
+  border: 1px solid #adc5f5;
+  border-radius: 8px;
+  background: #f1f6ff;
+  color: #234a8f;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
 .results-panel {
   padding: 28px;
 }
@@ -196,6 +225,69 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.candidate-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 172px;
+  padding: 16px;
+  border: 1px solid #d9e0ec;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #18202f;
+  text-align: left;
+}
+
+.candidate-card.selected {
+  border-color: #234a8f;
+  box-shadow: 0 0 0 3px rgba(35, 74, 143, 0.12);
+}
+
+.candidate-card strong,
+.candidate-card small,
+.candidate-card em,
+.candidate-card p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.candidate-card small {
+  color: #4f5d73;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.candidate-card p {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.candidate-card em {
+  color: #536176;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.confidence {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border-radius: 999px;
+  background: #eef3ff;
+  color: #234a8f;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .route-card {
@@ -354,6 +446,10 @@ button:disabled {
   }
 
   .route-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-grid {
     grid-template-columns: 1fr;
   }
 }
